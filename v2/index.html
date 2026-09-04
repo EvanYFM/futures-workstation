@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <title>期货研究工作站 · 数字花园风格测试页 v4</title>
+  <link rel="icon" href="data:,">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <!--
+    v4 测试页 · 数字花园风格(EvanYFM/digital-garden DESIGN.md 全套 token)
+    数据: ./data/dashboard-lite.json (由 extract_lite.py 从正式站 dashboard.json 提取)
+    变更: 顶部导航替代侧栏(正文全宽不溢出) / 全局数字 nowrap / 真实数据 / 品种点击弹详情
+    正式版注意: 品种详情弹层替换为跳转原站品种详情 view
+  -->
+
+  <!-- 顶栏导航(数字花园式,替代侧栏) -->
+  <header class="site-head">
+    <a class="brand" href="#top">
+      <span class="seal">期</span>
+      <span class="brand-name">期货研究工作站</span>
+      <span class="brand-sub">FUTURES RESEARCH</span>
+    </a>
+    <nav class="site-nav">
+      <a class="is-current" href="#top">总览</a>
+      <a href="#journal">交易日志</a>
+      <a href="#detail">品种详情</a>
+      <a href="#panorama">品种全景</a>
+      <a href="#cta">CTA 评分</a>
+      <a href="#history">历史回看</a>
+      <button class="taiji" id="themeBtn" type="button" aria-label="日夜切换">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle class="t-ring" cx="12" cy="12" r="9.5"/>
+          <path class="t-s" d="M12 2.5a9.5 9.5 0 0 1 0 19 a4.75 4.75 0 0 1 0-9.5 a4.75 4.75 0 0 0 0-9.5z"/>
+          <circle class="t-dot" cx="12" cy="12" r="1.7"/>
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <main class="page" id="top">
+    <!-- 页头 -->
+    <section class="page-head">
+      <p class="crumb">工作站<span class="c-dot"></span>总览</p>
+      <h1>中国期货研究全景</h1>
+      <p class="en-sub">CHINA FUTURES RESEARCH PANORAMA</p>
+      <div class="head-meta">
+        <button id="dateBtn" class="date-link" type="button">
+          数据日期 <b id="dateText">—</b>
+        </button>
+        <span class="meta-sep">·</span>
+        <span id="metaCount">覆盖 — 品种</span>
+        <span class="meta-sep">·</span>
+        <span id="metaGen">—</span>
+      </div>
+      <!-- 交易日历 -->
+      <div id="calPanel" class="cal" hidden>
+        <div class="cal-head">
+          <button id="calPrev" type="button" aria-label="上一月">‹</button>
+          <b id="calTitle">—</b>
+          <button id="calNext" type="button" aria-label="下一月">›</button>
+        </div>
+        <div class="cal-grid cal-week"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+        <div id="calDays" class="cal-grid cal-days"></div>
+        <p class="cal-foot"><span class="c-dot"></span>有快照的交易日</p>
+      </div>
+    </section>
+
+    <!-- 数据摘要(共边细线,无卡片) -->
+    <section class="sum-line" id="sumLine"></section>
+
+    <!-- 一 今日三方强共振 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">一</span>今日三方强共振</h2>
+        <span class="en-tag">TRIPLE RESONANCE</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">口径:内资 + 外资 − 家人;按三方净保证金金额列示;条形为相对强度。点击卡片查看详情。</p>
+      <div id="resonanceList" class="focus-grid"></div>
+    </section>
+
+    <!-- 二 期货资金潮汐 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">二</span>期货资金潮汐</h2>
+        <span class="en-tag">MARGIN TIDE</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">三方净保证金变动 × 主力涨跌,按流入流出与涨跌四分。</p>
+      <div id="tideGrid" class="tide-grid"></div>
+    </section>
+
+    <!-- 三 关键商品事件 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">三</span>关键商品事件</h2>
+        <span class="en-tag">KEY EVENTS</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">奇货可查当日商品概览事实;已过滤股指、国债与淀粉。</p>
+      <div id="eventList" class="rows"></div>
+    </section>
+
+    <!-- 四 板块方向速览 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">四</span>板块方向速览</h2>
+        <span class="en-tag">SECTOR BREADTH</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">每板块分别展示前三净多与前三净空(三方净保证金)。</p>
+      <div id="sectorGrid" class="sector-grid"></div>
+    </section>
+
+    <!-- 五 核心品种全景 -->
+    <section class="sec" id="panorama">
+      <header class="sec-head">
+        <h2><span class="sec-num">五</span>核心品种全景</h2>
+        <span class="en-tag">PANORAMA</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">自选品种优先;点击任一行查看品种详情(正式版跳转品种详情页)。</p>
+      <div class="tbl-wrap"><table class="tbl" id="panoTable"></table></div>
+    </section>
+
+    <!-- 六 席位贡献摘要 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">六</span>席位贡献摘要</h2>
+        <span class="en-tag">BROKERS</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">内资、外资按原方向;家人按反向指标展示。</p>
+      <div id="brokerGrid" class="broker-grid"></div>
+    </section>
+
+    <!-- 七 股指观察 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">七</span>股指观察</h2>
+        <span class="en-tag">EQUITY INDEX</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">股指期货资金与现货指数涨跌分列,不参与商品共振统计。</p>
+      <div class="tbl-wrap"><table class="tbl" id="indexTable"></table></div>
+    </section>
+
+    <!-- 八 数据状态 -->
+    <section class="sec">
+      <header class="sec-head">
+        <h2><span class="sec-num">八</span>快照与来源状态</h2>
+        <span class="en-tag">PROVENANCE</span>
+        <i class="sec-line"></i>
+      </header>
+      <p class="sec-note">所有日期独立固化;旧来源不冒充当日事实。</p>
+      <div id="statusBox" class="status"></div>
+    </section>
+
+    <footer class="page-foot">
+      <span>先确认口径 · 事实与推断三分 · 非投资建议</span>
+      <span class="en-tag">LOCAL RESEARCH WORKBENCH</span>
+    </footer>
+  </main>
+
+  <!-- 品种详情弹层(正式版替换为跳转品种详情页) -->
+  <div id="detailMask" class="detail-mask" hidden>
+    <div class="detail-panel" role="dialog" aria-modal="true">
+      <button id="detailClose" class="detail-close" type="button" aria-label="关闭">×</button>
+      <div id="detailBody"></div>
+      <p class="detail-note">测试页弹层 · 正式版此操作将跳转「品种详情」页</p>
+    </div>
+  </div>
+
+  <div id="loading" class="loading">正在装载快照数据…</div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
