@@ -17,6 +17,7 @@ const state = {
   decisionSector: "all",
   decisionSymbol: "all",
   decisionPage: 1,
+  editingObservationId: null,
   history: null,
   // state.historySymbol 已被「历史回看」页面占用，此处必须用独立字段名
   historyJournalSymbol: null,
@@ -712,6 +713,7 @@ function syncDecisionToHistory(record) {
 }
 
 function renderDecisionView() {
+  if (state.editingObservationId) { renderObservationEditor(); return; }
   const instruments = [...currentSnapshot().instruments];
   const sectors = [...new Set(instruments.map((item) => item.sector))].sort();
   $("#decisionSectorFilter").innerHTML = `<option value="all">全部板块</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}" ${state.decisionSector === sector ? "selected" : ""}>${escapeHtml(sector)}</option>`).join("")}`;
@@ -757,6 +759,71 @@ function renderDecisionView() {
       <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因（复盘）</span>${attrField("judgment","判断错？")}${attrField("timing","时机错？")}${attrField("position","仓位错？")}${attrField("tool","工具错？")}${attrField("execution","执行错？")}</div>
       <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误：&#10;下一次只改：">${escapeHtml(record.reviewNote)}</textarea></label>
     </div><p id="decisionFormMessage" class="form-message" aria-live="polite"></p><div class="decision-form-actions"><button class="decision-save" type="submit">保存复盘</button><button class="decision-delete" type="button" data-delete-decision="${escapeHtml(record.id)}">删除</button></div></form>`;
+}
+
+/* ===================== 历史复盘修订(编辑已有 observation) =====================
+   直接修订 observation 本体(非 decision 体系):保留原记录全部字段,只覆盖复盘相关字段,
+   经 HistoryStore.putObservation 写回(IndexedDB + 私有仓云同步,updated 新者胜)。
+   适用场景:Excel/月度复盘当时没填完整,事后补盈亏、归因、认知偏差等。 */
+function findObservation(id) {
+  return (state.history?.observations || []).find((item) => item.id === id) || null;
+}
+
+function startObservationEdit(id) {
+  if (!findObservation(id)) return;
+  state.editingObservationId = id;
+  switchView("decisions");
+  requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: "smooth", block: "start"}));
+}
+
+function renderObservationEditor() {
+  const item = findObservation(state.editingObservationId);
+  if (!item) { state.editingObservationId = null; renderDecisionView(); return; }
+  const kvRows = (obj, prefix) => Object.entries(obj || {}).map(([key, value]) =>
+    `<div class="obs-kv-row"><input name="${prefix}_key" value="${escapeHtml(key)}" readonly title="维度名不可改"><input name="${prefix}_value" value="${escapeHtml(String(value))}" placeholder="填写或留空删除"></div>`).join("");
+  const ratings = item.ratings || {};
+  const attribution = item.attribution || {};
+  $("#decisionEditor").innerHTML = `<form id="observationForm" data-obs-id="${escapeHtml(item.id)}">
+    <header><div><small>修订复盘 · ${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
+    <h3>${escapeHtml(item.variety || "")} ${escapeHtml(item.symbol || "")}</h3></div>
+    <div class="decision-market-facts"><em class="decision-signal-status">${item.executed ? "已执行" : "未执行"}</em></div></header>
+    <p class="decision-due">修订会保留原记录的全部信息,只覆盖下面填写的字段;保存后立即写入本地并同步私有数据仓。</p>
+    <div class="decision-form-grid">
+      <label>盈亏(元,可补填)<input name="myPnl" type="number" step="any" value="${item.myPnl == null ? "" : escapeHtml(String(item.myPnl))}" placeholder="亏损填负数"></label>
+      <label>仓位(占总仓位比例,可补填)<input name="positionPct" value="${escapeHtml(item.positionPct || "")}" placeholder="如 30%"></label>
+      <label class="wide">入场触发(可补填)<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="价格或技术条件"></label>
+      <label class="wide">止损 / 失效(可补填)<input name="stopLossTakeProfit" value="${escapeHtml(item.stopLossTakeProfit || "")}" placeholder="错在哪里退出"></label>
+      <label class="wide">未交易原因<input name="noTradeReason" value="${escapeHtml(item.noTradeReason || "")}"></label>
+      <label class="wide">复盘与认知偏差原文<textarea name="review" rows="4" placeholder="复盘内容、认知偏差、下一次只改一条">${escapeHtml(item.review || "")}</textarea></label>
+      <div class="decision-attr-grid wide"><span class="decision-attr-title">评分维度(值留空即删除该维度)</span>
+        <div class="obs-kv-grid">${kvRows(ratings, "rating")}</div>
+        <div class="obs-kv-row"><input name="rating_new_key" placeholder="新增维度名,如 情绪面"><input name="rating_new_value" placeholder="新增维度值,如 偏强"></div>
+      </div>
+      <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因(值留空即删除该项)</span>
+        <div class="obs-kv-grid">${kvRows(attribution, "attr")}</div>
+        <div class="obs-kv-row"><input name="attr_new_key" placeholder="新增归因名,如 判断错?"><input name="attr_new_value" placeholder="新增归因值,如 Y/N/说明"></div>
+      </div>
+    </div>
+    <p id="observationFormMessage" class="form-message" aria-live="polite"></p>
+    <div class="decision-form-actions"><button class="decision-save" type="submit">保存修订</button>
+    <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button></div>
+  </form>`;
+}
+
+function collectKvPairs(form, prefix) {
+  const out = {};
+  const keys = form.querySelectorAll(`input[name="${prefix}_key"]`);
+  keys.forEach((keyInput) => {
+    const key = keyInput.value.trim();
+    const row = keyInput.closest(".obs-kv-row");
+    const valueInput = row?.querySelector(`input[name="${prefix}_value"]`);
+    const value = valueInput ? valueInput.value.trim() : "";
+    if (key && value) out[key] = value;
+  });
+  const newKey = form.querySelector(`input[name="${prefix}_new_key"]`);
+  const newValue = form.querySelector(`input[name="${prefix}_new_value"]`);
+  if (newKey && newValue && newKey.value.trim() && newValue.value.trim()) out[newKey.value.trim()] = newValue.value.trim();
+  return Object.keys(out).length ? out : null;
 }
 
 const CTA_FACTOR_LABELS = {trend: "量价趋势", seat: "席位存量", position: "席位边际", carry: "基差与仓单", option: "期权偏度"};
@@ -837,6 +904,7 @@ function renderHistoryEntry(item) {
       <span class="history-instrument">${escapeHtml(historyInstrumentText(item))}</span>
       ${item.strategySource ? `<span class="history-strategy-source">参考来源：${escapeHtml(item.strategySource)}</span>` : ""}
       <em class="history-exec-flag">${item.executed ? "已执行" : "未执行"}</em>
+      <button class="history-edit-btn" type="button" data-edit-observation="${escapeHtml(item.id)}" title="修订这条复盘(补填盈亏/归因/认知偏差)">编辑</button>
     </header>
     ${historyPlanRows(item)}
     ${pnl.text ? `<div class="history-pnl ${pnl.cls}">${escapeHtml(pnl.text)}</div>` : ""}
@@ -1004,6 +1072,36 @@ function bindEvents() {
     if (deleteDecision) { state.decisions = state.decisions.filter((entry) => entry.id !== deleteDecision.dataset.deleteDecision); state.activeDecisionId = null; saveDecisions(); renderDecisionView(); }
     const historySymbol = event.target.closest("[data-history-symbol]");
     if (historySymbol) { state.historyJournalSymbol = historySymbol.dataset.historySymbol; renderHistoryView(); }
+    const editObs = event.target.closest("[data-edit-observation]");
+    if (editObs) startObservationEdit(editObs.dataset.editObservation);
+    if (event.target.closest("[data-cancel-observation-edit]")) { state.editingObservationId = null; renderDecisionView(); }
+  });
+  $("#decisionEditor").addEventListener("submit", (event) => {
+    if (event.target.id !== "observationForm") return;
+    event.preventDefault();
+    const item = findObservation(state.editingObservationId);
+    if (!item) return;
+    const form = event.target;
+    const values = Object.fromEntries(new FormData(form));
+    const message = $("#observationFormMessage");
+    const updated = {...item};
+    updated.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
+    updated.positionPct = values.positionPct.trim();
+    updated.trigger = values.trigger.trim();
+    updated.stopLossTakeProfit = values.stopLossTakeProfit.trim();
+    updated.noTradeReason = values.noTradeReason.trim();
+    updated.review = values.review.trim();
+    updated.ratings = collectKvPairs(form, "rating");
+    updated.attribution = collectKvPairs(form, "attr");
+    updated.editedAt = new Date().toISOString();
+    if (updated.executed && !updated.review && !updated.myPnl) {
+      message.textContent = "已执行记录至少补填盈亏或复盘内容之一。";
+      return;
+    }
+    HistoryStore.putObservation(updated);
+    state.editingObservationId = null;
+    renderDecisionView();
+    renderHistoryView();
   });
   $("#exportUserJournalBtn")?.addEventListener("click", exportUserJournal);
   $("#cloudSyncBtn")?.addEventListener("click", cloudSyncAction);

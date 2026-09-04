@@ -858,6 +858,21 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .history-export-btn:disabled { opacity: .6; cursor: default; }
 .history-sync-status { font-size: 11px; color: var(--gray); align-self: center; white-space: nowrap; }
 
+/* ================= 历史复盘修订 ================= */
+.history-edit-btn {
+  flex: 0 0 auto;
+  padding: 1px 9px;
+  border: 1px solid var(--line-strong);
+  color: var(--charcoal);
+  font-size: 11px;
+  white-space: nowrap;
+  transition: color .3s, border-color .3s;
+}
+.history-edit-btn:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
+.obs-kv-grid { display: grid; gap: 6px; grid-column: 1 / -1; }
+.obs-kv-row { display: grid; grid-template-columns: minmax(96px, .6fr) minmax(0, 1fr); gap: 8px; }
+.obs-kv-row input[readonly] { color: var(--gray); background: var(--paper-soft); }
+
 /* ================= 页脚(花园印记) ================= */
 .workspace::after {
   content: "先确认口径 · 事实与推断三分 · 非投资建议";

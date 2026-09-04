@@ -841,3 +841,6 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .history-plan b { font-size: 12px; font-weight: 500; line-height: 1.6; }
 
 .history-sync-status { font-size: 11px; color: var(--muted); align-self: center; }
+
+/* 历史复盘编辑按钮(legacy 兼容) */
+.history-edit-btn { flex: 0 0 auto; margin-left: 6px; padding: 1px 9px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font-size: 11px; cursor: pointer; }
