@@ -414,9 +414,10 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .segmented button.is-active { background: var(--ink); color: var(--paper); }
 
 /* ================= 全景表 ================= */
-.instrument-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 12px; align-items: start; }
+.instrument-layout { display: block; }
+.instrument-layout-full .table-wrap { width: 100%; }
 .table-wrap { overflow: auto; background: var(--paper); border: 1px solid var(--line); }
-.instrument-table { width: 100%; border-collapse: collapse; min-width: 890px; }
+.instrument-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
 .instrument-table th {
   position: sticky; top: 0; z-index: 2;
   background: var(--paper-soft); color: var(--gray);
@@ -872,6 +873,114 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .obs-kv-grid { display: grid; gap: 6px; grid-column: 1 / -1; }
 .obs-kv-row { display: grid; grid-template-columns: minmax(96px, .6fr) minmax(0, 1fr); gap: 8px; }
 .obs-kv-row input[readonly] { color: var(--gray); background: var(--paper-soft); }
+
+/* ================= 顶栏日历弹层 ================= */
+.meta-label { color: var(--gray); font-size: 12px; white-space: nowrap; }
+.date-link {
+  display: inline-flex; align-items: center; gap: 8px;
+  color: var(--ink);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 2px;
+  white-space: nowrap;
+}
+.date-link:hover { color: var(--cinnabar); border-bottom-color: var(--cinnabar); }
+.date-link b { font: 600 13px/1 var(--sans); letter-spacing: .08em; font-variant-numeric: tabular-nums; }
+.date-link svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.cal {
+  position: absolute; top: calc(100% + 6px); right: 0;
+  width: 264px;
+  background: var(--paper);
+  border: 1px solid var(--line-strong);
+  padding: 14px;
+  z-index: 100;
+  transition: background .9s;
+}
+.header-meta { position: relative; }
+.cal-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.cal-head strong { font: 600 14px/1 var(--serif); letter-spacing: .1em; }
+.cal-nav {
+  width: 26px; height: 26px;
+  display: grid; place-items: center;
+  border: 1px solid var(--line);
+  color: var(--gray); font-size: 15px; line-height: 1;
+}
+.cal-nav:hover { color: var(--ink); background: var(--paper-soft); }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-week span { text-align: center; font-size: 10px; color: var(--gray); padding: 4px 0; }
+.cal-days { row-gap: 3px; }
+.cal-day {
+  position: relative;
+  height: 28px;
+  display: grid; place-items: center;
+  font: 500 11px/1 var(--sans);
+  font-variant-numeric: tabular-nums;
+  color: var(--charcoal);
+  white-space: nowrap;
+}
+.cal-day:hover { background: var(--paper-soft); }
+.cal-day.has-data::after {
+  content: ""; position: absolute; bottom: 3px; left: 50%; transform: translateX(-50%);
+  width: 4px; height: 4px; border-radius: 50%; background: var(--cinnabar);
+}
+.cal-day.is-selected { background: var(--ink); color: var(--paper); }
+.cal-day.is-selected::after { background: var(--paper); }
+.cal-day.weekend { color: var(--gray); opacity: .55; }
+.cal-foot { margin: 10px 0 0; display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--gray); letter-spacing: .1em; }
+
+/* ================= 品种全景 · 5/10/30 日列 ================= */
+/* 表头与数据行对齐:head 第一列 128px = panorama-group 板块列;数字列固定宽;其余列定义 head/row 完全一致 */
+.panorama-head-v5 { grid-template-columns: 114px minmax(130px, .9fr) 64px 64px 64px minmax(110px, .65fr) minmax(190px, 1.2fr) minmax(130px, .85fr); }
+.panorama-row-v5 { grid-template-columns: minmax(130px, .9fr) 64px 64px 64px minmax(110px, .65fr) minmax(190px, 1.2fr) minmax(130px, .85fr); }
+.panorama-row-v5 > span:nth-child(2),
+.panorama-row-v5 > span:nth-child(3),
+.panorama-row-v5 > span:nth-child(4) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.panorama-head-v5 > span.num { text-align: right; }
+
+/* ================= 品种状态徽章 ================= */
+.trend-state {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 8px;
+  font-size: 10px;
+  letter-spacing: .08em;
+  white-space: nowrap;
+  border: 1px solid var(--line);
+  color: var(--gray);
+  background: var(--paper-soft);
+}
+.trend-state.trend-state-up      { color: var(--up);   border-color: var(--up);   background: var(--up-soft); }
+.trend-state.trend-state-down    { color: var(--down); border-color: var(--down); background: var(--down-soft); }
+.trend-state.trend-state-ext-up   { color: var(--paper); border-color: var(--up);   background: var(--up);   font-weight: 600; }
+.trend-state.trend-state-ext-down { color: var(--paper); border-color: var(--down); background: var(--down); font-weight: 600; }
+.trend-state.trend-state-flat    { color: var(--charcoal); border-color: var(--line-strong); }
+
+/* ================= 关键事件 tag 多空标位 ================= */
+.key-event-tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  background: var(--paper-soft);
+  color: var(--charcoal);
+  font-size: 9px;
+  white-space: nowrap;
+}
+.key-event-tag.key-event-tag-up   { color: var(--up);   border-color: var(--up);   background: var(--up-soft); }
+.key-event-tag.key-event-tag-down { color: var(--down); border-color: var(--down); background: var(--down-soft); }
+.key-event-flag {
+  font-style: normal;
+  font-weight: 700;
+  padding: 0 2px;
+  border-right: 1px solid currentColor;
+  padding-right: 4px;
+  opacity: .75;
+}
 
 /* ================= 页脚(花园印记) ================= */
 .workspace::after {

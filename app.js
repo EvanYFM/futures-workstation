@@ -17,6 +17,7 @@ const state = {
   decisionSector: "all",
   decisionSymbol: "all",
   decisionPage: 1,
+  decisionQuery: "",
   editingObservationId: null,
   history: null,
   // state.historySymbol 已被「历史回看」页面占用，此处必须用独立字段名
@@ -93,8 +94,10 @@ function maxAbs(items, getter) {
 }
 
 function renderDateControls() {
-  const options = state.data.dates.map((date) => `<option value="${date}" ${date === state.date ? "selected" : ""}>${formatDate(date)}</option>`).join("");
-  $("#dateSelect").innerHTML = options;
+  /* 日期切换已改为顶栏日历(见 index.html 内联脚本);此处仅同步按钮文本 */
+  const dateText = document.getElementById("dateText");
+  if (dateText && state.date) dateText.textContent = formatDate(state.date);
+  if (typeof window.initCalendar === "function") window.initCalendar(state.data.dates || [], state.date);
 }
 
 function summaryCard(label, value, note, tone = "") {
@@ -160,13 +163,20 @@ function renderTide() {
 
 function renderKeyEvents() {
   const events = currentSnapshot().keyEvents || [];
-  $("#keyEventList").innerHTML = events.length ? events.map((item) => `<button class="key-event-row" data-open-symbol="${escapeHtml(item.symbol)}">
-    <span class="key-event-name"><strong>${escapeHtml(item.variety)}</strong><small>${escapeHtml(item.symbol)} · ${escapeHtml(item.sector)}</small></span>
-    <span class="key-event-tags">${(item.events || []).map((label) => `<span>${escapeHtml(label)}</span>`).join("")}</span>
-    <span class="${signClass(item.priceChangePct)}"><small>涨跌</small><strong>${formatSigned(item.priceChangePct, 2)}%</strong></span>
-    <span class="${signClass(item.openInterestChangePct)}"><small>持仓</small><strong>${formatSigned(item.openInterestChangePct, 2)}%</strong></span>
-    <span><small>成交额</small><strong>${(numeric(item.turnover) / 1e8).toLocaleString("zh-CN", {maximumFractionDigits: 2})} 亿</strong></span>
-  </button>`).join("") : `<div class="detail-empty">该日期没有可验证的关键商品事件。</div>`;
+  $("#keyEventList").innerHTML = events.length ? events.map((item) => {
+    const tags = (item.events || []).map((label) => {
+      const cls = classifyEvent(label);
+      const flag = cls.flag ? `<i class="key-event-flag">${cls.flag}</i>` : "";
+      return `<span class="key-event-tag key-event-tag-${cls.tone}">${escapeHtml(label)}${flag}</span>`;
+    }).join("");
+    return `<button class="key-event-row" data-open-symbol="${escapeHtml(item.symbol)}">
+      <span class="key-event-name"><strong>${escapeHtml(item.variety)}</strong><small>${escapeHtml(item.symbol)} · ${escapeHtml(item.sector)}</small></span>
+      <span class="key-event-tags">${tags}</span>
+      <span class="${signClass(item.priceChangePct)}"><small>涨跌</small><strong>${formatSigned(item.priceChangePct, 2)}%</strong></span>
+      <span class="${signClass(item.openInterestChangePct)}"><small>持仓</small><strong>${formatSigned(item.openInterestChangePct, 2)}%</strong></span>
+      <span><small>成交额</small><strong>${(numeric(item.turnover) / 1e8).toLocaleString("zh-CN", {maximumFractionDigits: 2})} 亿</strong></span>
+    </button>`;
+  }).join("") : `<div class="detail-empty">该日期没有可验证的关键商品事件。</div>`;
 }
 
 function sectorSide(items, side) {
@@ -203,13 +213,22 @@ function renderCorePanorama() {
     $("#corePanorama").innerHTML = `<div class="detail-empty">该快照没有可用重点品种。</div>`;
     return;
   }
-  $("#corePanorama").innerHTML = `<div class="panorama-head"><span>板块</span><span>品种 / 行情</span><span>三方净变动</span><span>内资 / 外资 / 家人反向</span><span>趋势与信号</span></div>${groups.map((group) => `<section class="panorama-group"><header>${escapeHtml(group.sector)}</header><div class="panorama-group-rows">${group.items.map((item) => {
+  $("#corePanorama").innerHTML = `<div class="panorama-head panorama-head-v5"><span>板块</span><span>品种 / 行情</span><span class="num">5日</span><span class="num">10日</span><span class="num">30日</span><span>三方净变动</span><span>内资 / 外资 / 家人反向</span><span>趋势与信号</span></div>${groups.map((group) => `<section class="panorama-group"><header>${escapeHtml(group.sector)}</header><div class="panorama-group-rows">${group.items.map((item) => {
     const quote = item.quote;
-    return `<button class="panorama-row" data-open-symbol="${escapeHtml(item.symbol)}">
+    const mf = item.marketFlow || {};
+    const r5 = computeReturn5d(item.symbol);
+    const r10 = mf.return10d;
+    const r30 = mf.return30d;
+    const state = trendStateByReturn(r5);
+    const rCell = (v) => v == null ? `<span class="num gray">—</span>` : `<span class="num ${v > 0 ? "bull-text" : v < 0 ? "bear-text" : "neutral-text"}">${formatSigned(v, 2)}%</span>`;
+    return `<button class="panorama-row panorama-row-v5" data-open-symbol="${escapeHtml(item.symbol)}">
       <span class="panorama-name"><strong>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</strong><small>${escapeHtml(item.sector)} · ${escapeHtml(quote?.contract || item.margin.contract || "主力待披露")}</small>${quote ? `<em>${numeric(quote.close).toLocaleString("zh-CN", {maximumFractionDigits:4})} <b class="${signClass(quote.changePct)}">${formatSigned(quote.changePct, 2)}%</b></em>` : `<em>行情暂无</em>`}</span>
+      <span>${rCell(r5)}</span>
+      <span>${rCell(r10)}</span>
+      <span>${rCell(r30)}</span>
       <span class="panorama-signal"><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong><small class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</small></span>
       <span>${groupBars(item)}</span>
-      <span class="panorama-tags">${trendChip(item.trend)}<span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></span>
+      <span class="panorama-tags">${trendChip(item.trend)}<span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
     </button>`;
   }).join("")}</div></section>`).join("")}`;
 }
@@ -322,15 +341,20 @@ function renderInstrumentTable() {
   renderSectorFilter();
   const rows = filteredInstruments();
   if (!state.activeSymbol || !rows.some((item) => item.symbol === state.activeSymbol)) state.activeSymbol = rows[0]?.symbol || null;
-  $("#instrumentRows").innerHTML = rows.map((item) => `<tr class="${item.symbol === state.activeSymbol ? "is-active" : ""}" data-symbol="${escapeHtml(item.symbol)}">
+  $("#instrumentRows").innerHTML = rows.map((item) => {
+    const close = item.quote?.close;
+    const dayReturn = item.quote?.changePct;
+    const closeCell = close == null ? `<span class="gray">暂无</span>` : `${numeric(close).toLocaleString("zh-CN", {maximumFractionDigits: 4})}<span class="${dayReturn == null ? "gray" : signClass(dayReturn)}" style="margin-left:6px">${dayReturn == null ? "—" : `${formatSigned(dayReturn, 2)}%`}</span>`;
+    return `<tr class="${item.symbol === state.activeSymbol ? "is-active" : ""}" data-symbol="${escapeHtml(item.symbol)}">
     <td><div class="instrument-name"><button type="button" data-open-detail-symbol="${escapeHtml(item.symbol)}">${escapeHtml(item.variety)}</button><small>${escapeHtml(item.symbol)} · ${escapeHtml(item.sector)}</small></div></td>
+    <td class="num">${closeCell}</td>
     <td class="num ${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</td>
     <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</td>
     <td>${groupBars(item)}</td>
     <td class="trend-cell">${trendChip(item.trend)}</td>
     <td><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></td>
-  </tr>`).join("") || `<tr><td colspan="6" class="detail-empty">当前筛选条件下没有品种。</td></tr>`;
-  renderDetail();
+  </tr>`;
+  }).join("") || `<tr><td colspan="7" class="detail-empty">当前筛选条件下没有品种。</td></tr>`;
 }
 
 function seriesFor(symbol) {
@@ -720,7 +744,8 @@ function renderDecisionView() {
   const sectorItems = instruments.filter((item) => state.decisionSector === "all" || item.sector === state.decisionSector);
   if (state.decisionSymbol !== "all" && !sectorItems.some((item) => item.symbol === state.decisionSymbol)) state.decisionSymbol = "all";
   $("#decisionSymbolFilter").innerHTML = `<option value="all">全部品种</option>${sectorItems.sort((a, b) => a.variety.localeCompare(b.variety, "zh-CN")).map((item) => `<option value="${escapeHtml(item.symbol)}" ${state.decisionSymbol === item.symbol ? "selected" : ""}>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</option>`).join("")}`;
-  const signals = orderDecisionSignals(sectorItems.filter((item) => state.decisionSymbol === "all" || item.symbol === state.decisionSymbol));
+  const query = (state.decisionQuery || "").toUpperCase();
+  const signals = orderDecisionSignals(sectorItems.filter((item) => state.decisionSymbol === "all" || item.symbol === state.decisionSymbol)).filter((item) => !query || item.symbol.toUpperCase().includes(query) || (item.variety || "").toUpperCase().includes(query));
   const pageCount = Math.max(1, Math.ceil(signals.length / 10));
   state.decisionPage = Math.min(state.decisionPage, pageCount);
   const pageSignals = signals.slice((state.decisionPage - 1) * 10, state.decisionPage * 10);
@@ -824,6 +849,38 @@ function collectKvPairs(form, prefix) {
   const newValue = form.querySelector(`input[name="${prefix}_new_value"]`);
   if (newKey && newValue && newKey.value.trim() && newValue.value.trim()) out[newKey.value.trim()] = newValue.value.trim();
   return Object.keys(out).length ? out : null;
+}
+
+/* ===================== 5 日涨跌幅与品种状态(运行时计算) ===================== */
+function computeReturn5d(symbol) {
+  const dates = (state.data.dates || []).slice().sort();
+  const curIdx = dates.indexOf(state.date);
+  if (curIdx < 5) return null;
+  const prev = state.data.snapshots[dates[curIdx - 5]];
+  if (!prev) return null;
+  const cur = (currentSnapshot().instruments || []).find((x) => x.symbol === symbol);
+  const prevItem = (prev.instruments || []).find((x) => x.symbol === symbol);
+  const curClose = cur?.quote?.close;
+  const prevClose = prevItem?.quote?.close;
+  if (curClose == null || prevClose == null || prevClose === 0) return null;
+  return Math.round(((curClose - prevClose) / prevClose) * 10000) / 100;
+}
+
+function trendStateByReturn(r5) {
+  if (r5 == null) return { cls: "flat", label: "—" };
+  if (r5 >= 5) return { cls: "ext-up", label: "趋势极强" };
+  if (r5 <= -5) return { cls: "ext-down", label: "趋势极弱" };
+  if (r5 >= 3) return { cls: "up", label: "趋势偏强" };
+  if (r5 <= -3) return { cls: "down", label: "趋势偏弱" };
+  return { cls: "flat", label: "震荡" };
+}
+
+/* 关键事件标签多/空分类 */
+function classifyEvent(text) {
+  const t = String(text || "");
+  if (/空|跌|减|利空|偏弱|下跌/.test(t)) return { tone: "down", flag: "空" };
+  if (/多|涨|增|利多|偏强|上涨/.test(t)) return { tone: "up", flag: "多" };
+  return { tone: "neutral", flag: "" };
 }
 
 const CTA_FACTOR_LABELS = {trend: "量价趋势", seat: "席位存量", position: "席位边际", carry: "基差与仓单", option: "期权偏度"};
@@ -987,6 +1044,11 @@ function renderCta() {
 }
 
 function renderAll() {
+  /* 初始化交易日历(顶栏日历弹层) */
+  if (typeof window.initCalendar === "function") {
+    const allDates = state.data.dates || [];
+    window.initCalendar(allDates, state.date);
+  }
   renderDateControls();
   renderSummary();
   renderFocus();
@@ -1106,7 +1168,7 @@ function bindEvents() {
   $("#exportUserJournalBtn")?.addEventListener("click", exportUserJournal);
   $("#cloudSyncBtn")?.addEventListener("click", cloudSyncAction);
   renderCloudSyncStatus();
-  $("#dateSelect").addEventListener("change", (event) => setDate(event.target.value));
+  window.addEventListener("fr:set-date", (event) => setDate(event.detail));
   $("#symbolFilter").addEventListener("change", (event) => { state.symbol = event.target.value; renderInstrumentTable(); });
   $("#searchInput").addEventListener("input", (event) => { state.query = event.target.value; renderInstrumentTable(); });
   $("#sectorFilter").addEventListener("change", (event) => { state.sector = event.target.value; renderInstrumentTable(); });
@@ -1116,6 +1178,7 @@ function bindEvents() {
   $("#historyControls").addEventListener("change", (event) => { if (event.target.id === "historySymbolSelect") { state.historySymbol = event.target.value; renderHistory(); } });
   $("#decisionSectorFilter").addEventListener("change", (event) => { state.decisionSector = event.target.value; state.decisionSymbol = "all"; state.decisionPage = 1; renderDecisionView(); });
   $("#decisionSymbolFilter").addEventListener("change", (event) => { state.decisionSymbol = event.target.value; state.decisionPage = 1; renderDecisionView(); });
+  $("#decisionSearchInput").addEventListener("input", (event) => { state.decisionQuery = event.target.value; state.decisionPage = 1; renderDecisionView(); });
   $("#ctaSearchInput").addEventListener("input", (event) => { state.ctaQuery = event.target.value; renderCta(); });
   $("#ctaSectorFilter").addEventListener("change", (event) => { state.ctaSector = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaDirectionFilter").addEventListener("change", (event) => { state.ctaDirection = event.target.value; state.activeCtaSymbol = null; renderCta(); });
