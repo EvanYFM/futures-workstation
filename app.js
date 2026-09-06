@@ -1179,6 +1179,8 @@ function bindEvents() {
     state.editingObservationId = null;
     renderDecisionView();
     renderHistoryView();
+    renderCloudSyncStatus();
+    setTimeout(renderCloudSyncStatus, 2500);
   });
   $("#exportUserJournalBtn")?.addEventListener("click", exportUserJournal);
   $("#cloudSyncBtn")?.addEventListener("click", cloudSyncAction);
@@ -1239,6 +1241,13 @@ Promise.all([
     if (viewParam && ["overview", "detail", "instruments", "cta", "history", "decisions"].includes(viewParam)) switchView(viewParam);
     const journalParam = viewParams.get("historySymbol");
     if (journalParam) { state.historyJournalSymbol = journalParam.toUpperCase(); if (state.view === "decisions") renderHistoryView(); }
+    /* 打开页面自动双向同步一次私有数据仓(有 Token 时):远端新记录并入、本地新写推上去 */
+    if (JournalSync?.hasToken() && typeof HistoryStore !== "undefined") {
+      renderCloudSyncStatus();
+      HistoryStore.pushToCloud()
+        .then(() => { renderHistoryView(); renderDecisionView(); renderCloudSyncStatus(); })
+        .catch(() => { const el = document.getElementById("cloudSyncStatus"); if (el) el.textContent = "● 同步失败，点右侧按钮重试"; });
+    }
     $("#app").dataset.ready = "true";
   })
   .catch((error) => {
@@ -1303,5 +1312,9 @@ function cloudSyncAction() {
 function renderCloudSyncStatus() {
   const status = document.getElementById("cloudSyncStatus");
   if (!status || typeof JournalSync === "undefined") return;
-  status.textContent = JournalSync.hasToken() ? "● 已连接私有数据仓" : "○ 未连接（仅本地）";
+  if (!JournalSync.hasToken()) { status.textContent = "○ 未连接（仅本地）"; return; }
+  const st = typeof HistoryStore !== "undefined" && HistoryStore.syncState ? HistoryStore.syncState() : null;
+  if (st && st.unsynced > 0) status.textContent = `● 私有数据仓已连接 · ${st.unsynced} 条待同步（点右侧按钮重试）`;
+  else if (st && st.lastPushAt) status.textContent = `● 已同步 ${st.lastPushAt}`;
+  else status.textContent = "● 已连接私有数据仓";
 }
