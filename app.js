@@ -730,7 +730,8 @@ function syncDecisionToHistory(record) {
     trigger: record.trigger || "",
     ratings: {},
     attribution: record.attribution || {},
-    review: [record.mainContradiction, record.closeNote, record.reviewNote].filter(Boolean).join("\n"),
+    review: [record.mainContradiction, record.closeNote, record.reviewNote, record.selfInquiry ? `自我问答：${record.selfInquiry}` : ""].filter(Boolean).join("\n"),
+    selfInquiry: record.selfInquiry || "",
     raw: "",
   };
   HistoryStore.putObservation(observation);
@@ -783,6 +784,7 @@ function renderDecisionView() {
       <label>盈亏（元，选填）<input name="pnl" type="number" step="any" value="${escapeHtml(String(record.pnl ?? ""))}" placeholder="亏损填负数"></label>
       <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因（复盘）</span>${attrField("judgment","判断错？")}${attrField("timing","时机错？")}${attrField("position","仓位错？")}${attrField("tool","工具错？")}${attrField("execution","执行错？")}</div>
       <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误：&#10;下一次只改：">${escapeHtml(record.reviewNote)}</textarea></label>
+      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(record.selfInquiry || "")}</textarea></label>
     </div><p id="decisionFormMessage" class="form-message" aria-live="polite"></p><div class="decision-form-actions"><button class="decision-save" type="submit">保存复盘</button><button class="decision-delete" type="button" data-delete-decision="${escapeHtml(record.id)}">删除</button></div></form>`;
 }
 
@@ -825,6 +827,7 @@ function renderObservationEditor() {
       <label class="wide">未交易原因<input name="noTradeReason" value="${escapeHtml(item.noTradeReason || "")}"></label>
       <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因(复盘)</span>${attrField("judgment","判断错?")}${attrField("timing","时机错?")}${attrField("position","仓位错?")}${attrField("tool","工具错?")}${attrField("execution","执行错?")}</div>
       <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误:&#10;下一次只改:">${escapeHtml(item.reviewNote || "")}</textarea></label>
+      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(item.selfInquiry || "")}</textarea></label>
       <label class="wide">复盘与认知偏差原文<textarea name="review" rows="4">${escapeHtml(item.review || "")}</textarea></label>
     </div>
     <p id="observationFormMessage" class="form-message" aria-live="polite"></p>
@@ -1160,6 +1163,7 @@ function bindEvents() {
     updated.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
     updated.noTradeReason = values.noTradeReason.trim();
     updated.reviewNote = values.reviewNote.trim();
+    updated.selfInquiry = values.selfInquiry.trim();
     updated.review = values.review.trim();
     updated.attribution = Object.keys(attribution).length ? attribution : null;
     updated.editedAt = new Date().toISOString();
