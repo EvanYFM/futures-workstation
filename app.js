@@ -359,7 +359,9 @@ function renderInstrumentTable() {
 
 function seriesFor(symbol) {
   return state.data.dates.filter((date) => date <= state.date).reverse().map((date) => {
-    const item = state.data.snapshots[date].instruments.find((entry) => entry.symbol === symbol);
+    const snapshot = state.data.snapshots[date];
+    if (!snapshot) return null; /* 历史快照可能尚未由后台补载完成 */
+    const item = snapshot.instruments.find((entry) => entry.symbol === symbol);
     return item ? {
       date,
       hands: item.handsSignal,
@@ -1080,6 +1082,7 @@ function switchView(view) {
 }
 
 function setDate(date) {
+  const previousDate = state.date;
   state.date = date;
   state.symbol = "all";
   state.sector = "all";
@@ -1087,7 +1090,18 @@ function setDate(date) {
   state.detailQuery = "";
   state.decisionPage = 1;
   state.activeCtaSymbol = null;
-  renderAll();
+  if (state.data.snapshots[date]) { renderAll(); return; }
+  /* 该日快照可能还在后台补载队列里：按需拉取后再渲染，期间复用全屏装载提示 */
+  const loadingEl = document.getElementById("loadingState");
+  if (loadingEl) loadingEl.style.display = "grid";
+  ensureSnapshot(date)
+    .catch(() => {})
+    .then(() => {
+      if (loadingEl) loadingEl.style.display = "";
+      if (state.date !== date) return;
+      if (!state.data.snapshots[date]) { state.date = previousDate; } /* 拉取失败则留在原日期 */
+      renderAll();
+    });
 }
 
 function bindEvents() {
@@ -1222,8 +1236,50 @@ function bindEvents() {
   });
 }
 
+/* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
+   其余历史快照在首屏渲染后由后台静默补齐（写入 state.data.snapshots，浏览器 HTTP 缓存兜底回访）。 */
+function fetchSnapshot(date) {
+  return fetch(`data/snapshots/${date}.json`).then((response) => {
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+  });
+}
+const snapshotPending = new Map(); /* 日期 -> 进行中的请求，避免重复拉取 */
+function ensureSnapshot(date) {
+  if (!date || !state.data || state.data.snapshots[date]) return Promise.resolve(state.data?.snapshots[date] || null);
+  if (!snapshotPending.has(date)) {
+    const request = fetchSnapshot(date).then((snapshot) => {
+      state.data.snapshots[date] = snapshot;
+      snapshotPending.delete(date);
+      return snapshot;
+    }).catch((error) => {
+      snapshotPending.delete(date);
+      throw error;
+    });
+    snapshotPending.set(date, request);
+  }
+  return snapshotPending.get(date);
+}
+function preloadHistoricalSnapshots() {
+  let cursor = Promise.resolve();
+  for (const date of (state.data.dates || [])) {
+    if (state.data.snapshots[date]) continue;
+    cursor = cursor.then(() => ensureSnapshot(date)).catch(() => {}); /* 串行补载，失败跳过不打断 */
+  }
+  return cursor;
+}
+const dashboardLoad = fetch("data/dashboard-meta.json", {cache: "no-store"})
+  .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+  .then((meta) => fetchSnapshot(meta.latestDate).then((snapshot) => ({
+    generatedAt: meta.generatedAt,
+    dates: meta.dates,
+    latestDate: meta.latestDate,
+    snapshots: {[meta.latestDate]: snapshot},
+  })))
+  .catch(() => fetch("data/dashboard.json").then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })); /* 旧数据无 meta 时回退整包 */
+
 Promise.all([
-  fetch("data/dashboard.json").then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }),
+  dashboardLoad,
   fetch("run-manifest.json", {cache: "no-store"}).then((response) => response.ok ? response.json() : null),
   typeof HistoryStore !== "undefined" ? HistoryStore.init().catch((error) => ({observations: [], trades: [], narratives: [], months: [], errors: [String(error.message || error)]})) : Promise.resolve(null),
 ])
@@ -1249,6 +1305,9 @@ Promise.all([
         .catch(() => { const el = document.getElementById("cloudSyncStatus"); if (el) el.textContent = "● 同步失败，点右侧按钮重试"; });
     }
     $("#app").dataset.ready = "true";
+    /* 首屏已出：后台补齐其余历史快照（串行），补完后重渲染一次填充序列图/5日涨跌；
+       decisions 视图含表单，避免重渲染清空输入，留给下次切换视图时自然取数 */
+    preloadHistoricalSnapshots().then(() => { if (state.view !== "decisions") renderAll(); });
   })
   .catch((error) => {
     $("#loadingState").textContent = `数据装载失败：${error.message}。请通过本地 HTTP 服务打开。`;
