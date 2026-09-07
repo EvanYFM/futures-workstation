@@ -1,4 +1,7 @@
 # 期货研究工作站
+<p align="center">
+  <img src="assets/hero.svg" alt="期货研究工作站" width="840">
+</p>
 
 纯静态站点：行情、席位、资金、CTA 评分。个人复盘数据存私有数据仓（futures-journal-data），不在此公开仓。
 
