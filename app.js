@@ -1223,7 +1223,7 @@ function bindEvents() {
 }
 
 Promise.all([
-  fetch("data/dashboard.json", {cache: "no-store"}).then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }),
+  fetch("data/dashboard.json").then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); }),
   fetch("run-manifest.json", {cache: "no-store"}).then((response) => response.ok ? response.json() : null),
   typeof HistoryStore !== "undefined" ? HistoryStore.init().catch((error) => ({observations: [], trades: [], narratives: [], months: [], errors: [String(error.message || error)]})) : Promise.resolve(null),
 ])
