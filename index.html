@@ -1,7 +1,20 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
+  <script>
+    /* 主题防闪白：在任何 CSS/图片渲染前恢复持久化主题；
+       无保存值时回退跟随系统 prefers-color-scheme */
+    (function () {
+      try {
+        var saved = localStorage.getItem('frv2.theme');
+        var theme = (saved === 'dark' || saved === 'light')
+          ? saved
+          : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+      } catch (e) { /* localStorage 不可用时保持 CSS 默认亮色 */ }
+    })();
+  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>中国期货研究全景</title>
   <link rel="icon" href="data:,">
@@ -15,7 +28,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles-v2.css">
+  <link rel="stylesheet" href="./styles-v2.css?v=20260908a">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">
@@ -300,12 +313,12 @@
   </script>
 
   <script>
-    /* 太极日夜钮:与花园站同款交互,data-theme 持久化(独立 key,不影响旧版) */
+    /* 太极日夜钮:与花园站同款交互,data-theme 持久化(独立 key,不影响旧版);
+       主题恢复已提前到 <head>,此处只负责按钮状态与切换 */
     (function () {
-      var root = document.documentElement;
-      var saved = localStorage.getItem('frv2.theme');
-      if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
       var btn = document.getElementById('themeBtn');
+      if (!btn) return;
+      var root = document.documentElement;
       btn.classList.toggle('is-flipped', root.getAttribute('data-theme') === 'dark');
       btn.addEventListener('click', function () {
         var next = (root.getAttribute('data-theme') || 'light') === 'light' ? 'dark' : 'light';
@@ -315,8 +328,8 @@
       });
     })();
   </script>
-  <script src="./history-store.js?v=20260904v2" defer></script>
-  <script src="./journal-sync.js?v=20260904v2" defer></script>
-  <script src="./app.js?v=20260904v2" defer></script>
+  <script src="./history-store.js?v=20260908a" defer></script>
+  <script src="./journal-sync.js?v=20260908a" defer></script>
+  <script src="./app.js?v=20260908a" defer></script>
 </body>
 </html>
