@@ -47,5 +47,10 @@ jobs:
               print("缺快照文件:", missing); sys.exit(1)
           if meta["latestDate"] != max(meta["dates"]):
               print("latestDate 不是最新日期"); sys.exit(1)
-          print(f"✓ 快照契约通过：{len(meta['dates'])} 天，最新 {meta['latestDate']}")
+          # 反向守门（2026-09-08 实际踩坑）：快照目录里最新的文件必须被 meta 收录，
+          # 否则发布漏更新 meta 时首页会永远停在旧日期
+          latest_file = max(p.stem for p in (root / "data" / "snapshots").glob("*.json"))
+          if latest_file != meta["latestDate"]:
+              print(f"快照目录最新 {latest_file} != meta.latestDate {meta['latestDate']} —— meta 未随发布更新"); sys.exit(1)
+          print(f"✓ 快照契约通过：{len(meta['dates'])} 天在册，最新 {meta['latestDate']}")
           EOF
