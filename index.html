@@ -17,18 +17,15 @@
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>中国期货研究全景</title>
-  <link rel="icon" href="data:,">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <!--
-    正式版 · v2 全套设计(2026-09-04 起为默认首页;旧版设计保留在 legacy.html 可随时回退):
+    正式版 · v2 全套设计(2026-09-04 起为默认首页;旧版设计已下线,历史版本见 git):
     - 数据与交互内核 100% 同源根目录 app.js / history-store.js / journal-sync.js,零拷贝零漂移
     - DOM 骨架保留全部渲染目标 id 与 data-view 事件委托属性,仅视觉层换数字花园设计语言
     - 设计 token 见 styles-v2.css 头部;旧版配色变量在此处做别名映射(--bull→--up 等)
-    - 切换默认首页时:本文件内容改名 index.html,导航恢复页内视图切换
+    - 字体走系统栈(--serif/--sans 已含 PingFang/雅黑回退),不请求外网字体,国内首屏无阻塞
   -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600&family=Noto+Sans+SC:wght@400;500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./styles-v2.css?v=20260908a">
+  <link rel="stylesheet" href="./styles-v2.css?v=20260908d">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">

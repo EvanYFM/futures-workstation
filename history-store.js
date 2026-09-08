@@ -311,11 +311,16 @@ const HistoryStore = (() => {
   /* 工作台保存复盘时调用：写入 IndexedDB 并同步内存缓存，时间线即时可见；
      有 Token 时后台自动同步到私有数据仓；失败计入待同步数(状态栏可见),不再静默 */
   function putObservation(observation) {
-    if (!observation || !observation.id) return;
+    if (!observation || !observation.id) {
+      console.warn("[HistoryStore] putObservation 忽略了缺 id 的记录（静默丢弃会掩盖数据丢失）", observation);
+      return;
+    }
     const stamped = {...observation, updated: Date.now()};
     cache.observations = cache.observations.filter((item) => item.id !== stamped.id);
     cache.observations.push(stamped);
-    if (db) putMany(STORES.observations, [stamped]).catch(() => {});
+    if (db) putMany(STORES.observations, [stamped]).catch((error) => {
+      console.warn("[HistoryStore] IndexedDB 写入失败（重启后该记录可能丢失，建议导出备份）", error);
+    });
     if (typeof JournalSync !== "undefined" && JournalSync.hasToken()) {
       unsynced += 1;
       JournalSync.syncJournal({observations: [stamped], trades: [], narratives: [], months: []})

@@ -17,7 +17,7 @@ jobs:
       - name: JS 语法检查（node --check）
         run: |
           set -e
-          for f in app.js history-store.js journal-sync.js v2/app.js; do
+          for f in app.js history-store.js journal-sync.js; do
             [ -f "$f" ] || continue
             node --check "$f"
             echo "✓ $f"

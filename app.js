@@ -1261,12 +1261,21 @@ function ensureSnapshot(date) {
   return snapshotPending.get(date);
 }
 function preloadHistoricalSnapshots() {
-  let cursor = Promise.resolve();
-  for (const date of (state.data.dates || [])) {
-    if (state.data.snapshots[date]) continue;
-    cursor = cursor.then(() => ensureSnapshot(date)).catch(() => {}); /* 串行补载，失败跳过不打断 */
-  }
-  return cursor;
+  /* 并发补载（窗口 4）：最近 5 个交易日先行——序列图/5日涨跌最先可用，其余按新→旧全量补齐；
+     单日失败跳过不打断（与原串行版一致） */
+  const CONCURRENCY = 4;
+  const drain = async (dates) => {
+    let index = 0;
+    const worker = async () => {
+      while (index < dates.length) {
+        const date = dates[index++];
+        try { await ensureSnapshot(date); } catch (error) { /* 失败跳过 */ }
+      }
+    };
+    await Promise.all(Array.from({length: Math.min(CONCURRENCY, dates.length)}, worker));
+  };
+  const missing = (state.data.dates || []).filter((date) => !state.data.snapshots[date]);
+  return drain(missing.slice(0, 5)).then(() => drain(missing.slice(5)));
 }
 const dashboardLoad = fetch("data/dashboard-meta.json", {cache: "no-store"})
   .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })

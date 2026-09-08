@@ -1070,3 +1070,14 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .section-heading p { display: none; }
   .section-heading h2 { white-space: normal; }
 }
+
+/* 小屏导航：回退字体度量更宽，6 个导航项在 ≤480px 放不下时换行收纳 */
+@media (max-width: 480px) {
+  /* flex-shrink:0 会让导航永远不收窄,小屏必须允许占满整行再换行 */
+  .site-nav { flex: 1 1 100%; flex-wrap: wrap; gap: 6px 16px; }
+  .nav-item { font-size: 13px; }
+  /* 全景席位条与股指行:固定最小列宽之和(≈400px)超出小屏,压缩模板 */
+  .group-bars { min-width: 0; }
+  .group-line { grid-template-columns: 18px minmax(0, 1fr) 54px; gap: 5px; }
+  .index-row { grid-template-columns: minmax(0, 1fr) 84px 112px; gap: 8px; }
+}
