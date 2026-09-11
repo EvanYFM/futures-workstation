@@ -1081,3 +1081,7 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .group-line { grid-template-columns: 18px minmax(0, 1fr) 54px; gap: 5px; }
   .index-row { grid-template-columns: minmax(0, 1fr) 84px 112px; gap: 8px; }
 }
+
+.netflow-grid, .seatflow-grid { display: grid; gap: 14px; }
+.seatflow-brokers { display: block; margin-top: 2px; color: var(--muted, #647181); font-size: 10px; font-style: normal; }
+.netflow-block .sector-item span strong { font-variant-numeric: tabular-nums; }
