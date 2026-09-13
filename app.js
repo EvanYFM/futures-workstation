@@ -1262,7 +1262,7 @@ function bindEvents() {
 }
 
 /* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
-   其余历史快照在首屏渲染后由后台静默补齐（写入 state.data.snapshots，浏览器 HTTP 缓存兜底回访）。 */
+   最近5日快照在首屏后补齐，其余按需读取（写入 state.data.snapshots，浏览器 HTTP 缓存兜底回访）。 */
 function fetchSnapshot(date) {
   return fetch(`data/snapshots/${date}.json`).then((response) => {
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -1286,7 +1286,7 @@ function ensureSnapshot(date) {
   return snapshotPending.get(date);
 }
 function preloadHistoricalSnapshots() {
-  /* 并发补载（窗口 4）：最近 5 个交易日先行——序列图/5日涨跌最先可用，其余按新→旧全量补齐；
+  /* 并发补载（窗口 4）：最近 5 个交易日先行——序列图/5日涨跌最先可用，其余历史按需读取；
      单日失败跳过不打断（与原串行版一致） */
   const CONCURRENCY = 4;
   const drain = async (dates) => {
@@ -1300,7 +1300,7 @@ function preloadHistoricalSnapshots() {
     await Promise.all(Array.from({length: Math.min(CONCURRENCY, dates.length)}, worker));
   };
   const missing = (state.data.dates || []).filter((date) => !state.data.snapshots[date]);
-  return drain(missing.slice(0, 5)).then(() => drain(missing.slice(5)));
+  return drain(missing.slice(0, 5));
 }
 const dashboardLoad = fetch("data/dashboard-meta.json", {cache: "no-store"})
   .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
@@ -1310,7 +1310,7 @@ const dashboardLoad = fetch("data/dashboard-meta.json", {cache: "no-store"})
     latestDate: meta.latestDate,
     snapshots: {[meta.latestDate]: snapshot},
   })))
-  .catch(() => fetch("data/dashboard.json").then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })); /* 旧数据无 meta 时回退整包 */
+  .catch(() => fetch("run-manifest.json", {cache:"no-store"}).then((r)=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).then((m)=>fetchSnapshot(m.latestDate).then((snapshot)=>({generatedAt:m.generatedAt,latestDate:m.latestDate,dates:m.snapshotDates,snapshots:{[m.latestDate]:snapshot}})))); /* 备用索引也按日读取，不再下载整包 */
 
 Promise.all([
   dashboardLoad,

@@ -33,10 +33,13 @@ var JournalSync = (function () {
       },
       body: body ? JSON.stringify(body) : undefined
     }).then(function (r) {
-      if (r.status === 404) return null;                 /* 文件尚不存在 */
+      if (r.status === 404 && method === "GET") return null;                 /* 文件尚不存在 */
       if (r.status === 401) throw new Error("Token 无效或已过期");
       if (!r.ok) throw new Error("GitHub " + r.status);
-      return r.json();
+      return r.json().then(function (j) {
+        if (method === "PUT" && (!j || !j.commit || !j.content)) throw new Error("GitHub 未确认写入");
+        return j;
+      });
     });
   }
 
@@ -57,8 +60,10 @@ var JournalSync = (function () {
   }
 
   /* 同步：拉取 → merge(本地, 远端) → 推送；409 冲突自动重试一次 */
+  var syncQueues = {};
   function sync(path, localObj, merge) {
     if (!hasToken()) return Promise.resolve({data: localObj, local: true});
+    localObj = JSON.parse(JSON.stringify(localObj));
     function attempt(retry) {
       return pull(path).then(function (r) {
         var sha = r ? r.sha : null;
@@ -71,7 +76,9 @@ var JournalSync = (function () {
         throw e;
       });
     }
-    return attempt(true);
+    var work = (syncQueues[path] || Promise.resolve()).catch(function () {}).then(function () { return attempt(true); });
+    syncQueues[path] = work;
+    return work;
   }
 
   /* 复盘合并：按 id，updated 较新者胜；远端独有条目并入本地视图 */
