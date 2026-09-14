@@ -19,3 +19,4 @@ Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGE
 - 无用户截图：资金流与 OpenVLab 期权因子当日缺失，按规则留空（补截图后可 REBUILD_SNAPSHOT=1 重建同日）。
 - 事故修复：`fetch_eastmoney_main_quotes.py` 的 qhkch 概览抓取异常静默产出空 position_rows CSV，build 席位硬复核拦截；改用机构报告 `contract_rows.csv` 按主力合约过滤转换。**注意转换必须用 `normalize_contract` 比较（郑商所 3 位合约），且每品种只留主力合约行——build 主力合约 fallback 链含 `quotes.contract`，多合约行会大小写不匹配全灭。**
 - 东财技术面接口连续 3 日 0/6 异常，标缺失。
+- 同日补录：用户补发 4 张同花顺截图（80 行去重），资金流覆盖升至 55 品种（SA/SH 截图未含）；JM 收盘经 AKShare 对账修正（1508→1588）；净流出前列为贵金属有色（沪铜 -15.65亿、沪银 -14.26、沪金 -10.99）。REBUILD_SNAPSHOT=1 重建发布。
