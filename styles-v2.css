@@ -1084,4 +1084,10 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 
 .netflow-grid, .seatflow-grid { display: grid; gap: 14px; }
 .seatflow-brokers { display: block; margin-top: 2px; color: var(--muted, #647181); font-size: 10px; font-style: normal; }
+/* 净持仓分布：数值列加宽并禁止折行（原 58px 仪表列宽度不够，"资金 -38.23 亿"会折成两行） */
+.netflow-block .sector-item { grid-template-columns: minmax(0, 1fr) 96px 76px; }
+.netflow-block .sector-item > span:not(.sector-item-name) {
+  display: inline-flex; justify-self: end; align-items: baseline; gap: 4px;
+  white-space: nowrap; text-align: right;
+}
 .netflow-block .sector-item span strong { font-variant-numeric: tabular-nums; }
