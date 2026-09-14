@@ -11,4 +11,4 @@
 
 Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGES_DEPLOY_ENABLED=true。已准备verified-pages工作流。在此之前分支发布仍独立运行。
 
-旧抓取细节、Cookie失效处理及事故过程见 源码仓 docs/archive/2026-09-13-daily-data-update-handoff.md。Cookie通过环境变量或受控本机配置注入，不提交到Git。
+旧抓取细节、Cookie失效处理及事故过程见 [历史归档](archive/2026-09-13-daily-data-update-handoff.md)。Cookie通过环境变量或受控本机配置注入，不提交到Git。
