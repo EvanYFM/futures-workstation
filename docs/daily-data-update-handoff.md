@@ -12,3 +12,10 @@
 Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGES_DEPLOY_ENABLED=true。已准备verified-pages工作流。在此之前分支发布仍独立运行。
 
 旧抓取细节、Cookie失效处理及事故过程见 [历史归档](archive/2026-09-13-daily-data-update-handoff.md)。Cookie通过环境变量或受控本机配置注入，不提交到Git。
+
+## 2026-09-14 执行记录（WorkBuddy）
+
+- 按新清单跑通 9/14 全流程并发布：59 商品/63 CTA、保证金与行情 fresh 59/59、席位净多/净空 59/59、seatFlow 8/8（Cookie 有效）、49 测试全过、py_compile 全过。公开仓 `715c6ca`、源码仓 `75d3335`。
+- 无用户截图：资金流与 OpenVLab 期权因子当日缺失，按规则留空（补截图后可 REBUILD_SNAPSHOT=1 重建同日）。
+- 事故修复：`fetch_eastmoney_main_quotes.py` 的 qhkch 概览抓取异常静默产出空 position_rows CSV，build 席位硬复核拦截；改用机构报告 `contract_rows.csv` 按主力合约过滤转换。**注意转换必须用 `normalize_contract` 比较（郑商所 3 位合约），且每品种只留主力合约行——build 主力合约 fallback 链含 `quotes.contract`，多合约行会大小写不匹配全灭。**
+- 东财技术面接口连续 3 日 0/6 异常，标缺失。
