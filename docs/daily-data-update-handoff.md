@@ -46,3 +46,13 @@ Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGE
 - AKShare 对账：58 宇宙主力行 close/涨跌幅 100% 吻合；差异仅 F 月均价行、SS 主力口径（THS 已切 ss2611、AK 仍 ss2610）、EG/EB/PG 持仓快照口径，均保留 THS 原值不修正。
 - REBUILD_SNAPSHOT=1 重建并重发布：私有仓 `6dceed2`、公开仓 `6e63085`，线上 latestDate=20260916（60 dates）。
 - 环境注意：本机代理 5352 死掉后 git push 全挂（CONNECT 502），新代理端口 7890（Clash）可用——`git -c http.proxy=http://127.0.0.1:7890 push`。
+
+## 2026-09-17 执行记录（WorkBuddy）
+
+- 全流程发布：60 商品/64 CTA、行情 58/58（AKShare/新浪）、保证金 58/58、seatFlow 8/8、技术面 6/6、50 单测全过、check_public_artifacts 61 dates latest 20260917。私有仓 `b46b227`、公开仓 `3d610ec`+`c99a0b5`。
+- **新增 SC（原油）/EC（集运欧线）quote-only 品种**：二者无席位持仓数据（奇货可查不提供席位页），新增 `QUOTE_ONLY_VARIETIES`（build_research_dashboard.py）——行情/基差/仓单等照常接入，brokerRanking/marketFlow 留空；validate_seat_evidence 豁免该类品种。今天 SC 785.2 -5.05%、EC 2215.5 +6.51% 已上线。
+- **转录方法升级（骨架合并）**：纯图面逐行转录出现行间串行污染（与昨日数据雷同），改为 AKShare 骨架（宇宙 58 行 close/chg/volume/oi/oi_chg/return 系列）+ qhkch 概览全量行情（`data/qhkch_overview_quotes_20260917.json`，81 品种 close/chg/oi/oi_chg/turnover，含非宇宙品种）+ 图面仅取 THS 独有列（资金流向/非宇宙行增量）。**图面 capital_flow 仅非宇宙行与金融行填入，宇宙行留空**（读图污染风险）；WR 线材 qhkch 缺失且图面未可靠定位，当日缺失。
+- RR 粳米今天触发整板占位护栏被剔除（排名未公布）——instruments 58→57，加 SC/EC 后 60。
+- Cookie 又过期（第 3 次，有效期约 1 天确认），`qhkch_browser_login.js` 第 3 次运行一次通过（验证码 99896）。
+- **事故：部署仓 .git 被会话中断摧毁**（pull --rebase 中途 SIGTERM + sync 引擎），按既定路径恢复：备份未发布文件 → git init + remote add + fetch + `checkout -f -B main FETCH_HEAD`（remote-tracking ref 不持久，用 FETCH_HEAD）。恢复后发现远端多出用户网页端提交（PR #1 review-lifecycle 合并 + c2c58d9 补齐 20260916 run-manifest），已 rebase 其上再发布。
+- **run-manifest 护栏首次生效**：恢复后首次发布发现部署仓 run-manifest 停在 0916/60（与 AGENTS 新规冲突），已同步 20260917/61 并推送（`c99a0b5`）。
