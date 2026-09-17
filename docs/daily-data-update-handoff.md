@@ -56,3 +56,16 @@ Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGE
 - Cookie 又过期（第 3 次，有效期约 1 天确认），`qhkch_browser_login.js` 第 3 次运行一次通过（验证码 99896）。
 - **事故：部署仓 .git 被会话中断摧毁**（pull --rebase 中途 SIGTERM + sync 引擎），按既定路径恢复：备份未发布文件 → git init + remote add + fetch + `checkout -f -B main FETCH_HEAD`（remote-tracking ref 不持久，用 FETCH_HEAD）。恢复后发现远端多出用户网页端提交（PR #1 review-lifecycle 合并 + c2c58d9 补齐 20260916 run-manifest），已 rebase 其上再发布。
 - **run-manifest 护栏首次生效**：恢复后首次发布发现部署仓 run-manifest 停在 0916/60（与 AGENTS 新规冲突），已同步 20260917/61 并推送（`c99a0b5`）。
+
+## 品种纳入规则变更（2026-09-17 用户确认）
+
+1. **网站品种剔除（下次数据更新生效，已改 build_research_dashboard.py EXCLUDED_SYMBOLS）**：
+   短纤 PF、瓶片 PR、国际铜 BC 取消纳入、不再观察。
+2. **每日同花顺截图转录排除清单（以下品种行不再纳入每日快照与数据）**：
+   线材 wr、菜籽 RS、纤维板 fb、胶合板 bb、PVC月均价 v2611F、粳米 rr、原木 lg、
+   塑料月均价 l2611F、聚丙烯月均价 pp2611F、双胶纸 op、钯 pd、棉纱 CY、铂 pt、
+   铝合金 ad、国际铜 bc、玉米淀粉 cs。
+   （其中 ad/rr/cy/op/rs/bc 本就在 EXCLUDED_SYMBOLS；wr/fb/bb/lg/cs/pt/pd/F 行为非宇宙行，
+   此后转录一律跳过。）
+3. 已发布的历史数据不回溯修改；自下一次「更新XX日数据」起，快照 universe 不再含 PF/PR/BC，
+   THS 转录不再产出上述 16 品种行。
