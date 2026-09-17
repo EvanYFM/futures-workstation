@@ -25,7 +25,7 @@
     - 设计 token 见 styles-v2.css 头部;旧版配色变量在此处做别名映射(--bull→--up 等)
     - 字体走系统栈(--serif/--sans 已含 PingFang/雅黑回退),不请求外网字体,国内首屏无阻塞
   -->
-  <link rel="stylesheet" href="./styles-v2.css?v=20260914netflow">
+  <link rel="stylesheet" href="./styles-v2.css?v=20260916lifecycle">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">
@@ -202,7 +202,7 @@
       <section id="view-decisions" class="view" aria-labelledby="decision-title">
         <div class="section-heading top-heading">
           <div><span class="section-index">十三</span><h2 id="decision-title">交易日志</h2></div>
-          <p>工作站快照 → 人工确认 → 一页复盘 → 下一次只改一条</p>
+          <p>保存 = 持仓/观察中，可反复修改；发布 = 已平仓，归档固定；删除 = 本地与云端一并移除</p>
         </div>
         <div class="filter-bar decision-filter-bar">
           <select id="decisionSectorFilter" aria-label="按板块筛选决策品种"><option value="all">全部板块</option></select>
@@ -211,7 +211,7 @@
         </div>
         <div id="decisionSignals" class="decision-signals"></div>
         <div class="decision-layout">
-          <section class="decision-list-shell"><h3>决策记录</h3><div id="decisionList"></div></section>
+          <section class="decision-list-shell"><h3>进行中的复盘</h3><div id="decisionList"></div></section>
           <section id="decisionEditor" class="decision-editor"></section>
         </div>
         <div class="section-heading top-heading">
@@ -221,7 +221,7 @@
             <button id="cloudSyncBtn" class="history-export-btn" type="button" title="配置或使用 GitHub Token,把复盘同步到私有数据仓(跨设备)">🔐 云端同步</button>
             <button id="exportUserJournalBtn" class="history-export-btn" type="button" title="备用通道:把工作台新写的复盘导出为 JSON">📤 导出备份</button>
           </div>
-          <p>导入的 Excel 交易日志与月度复盘按品种聚合;同一品种的开仓、加仓、减仓、平仓串成时间线</p>
+          <p>已发布的复盘按品种归档;同一品种的开仓、加仓、减仓、平仓串成时间线;进行中的卡片只留在上方工作区</p>
         </div>
         <div id="historySummary" class="summary-strip history-summary"></div>
         <div class="history-layout">
@@ -325,8 +325,8 @@
       });
     })();
   </script>
-  <script src="./history-store.js?v=20260913audit" defer></script>
-  <script src="./journal-sync.js?v=20260913audit" defer></script>
-  <script src="./app.js?v=20260913audit" defer></script>
+  <script src="./history-store.js?v=20260916lifecycle" defer></script>
+  <script src="./journal-sync.js?v=20260916lifecycle" defer></script>
+  <script src="./app.js?v=20260916lifecycle" defer></script>
 </body>
 </html>

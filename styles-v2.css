@@ -730,6 +730,16 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .decision-save:hover { opacity: .88; }
 .decision-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .decision-delete { min-height: 34px; margin-top: 10px; padding: 0 12px; border: 1px solid var(--line); background: var(--paper); color: var(--gray); font-size: 11px; }
+.decision-delete:hover { color: var(--down); border-color: var(--down); }
+/* 发布归档主按钮：朱砂色系（--cinnabar），与保存(墨色)形成语义区分 */
+.decision-publish { min-height: 34px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--cinnabar); background: var(--cinnabar); color: var(--paper); font-size: 11px; font-weight: 600; }
+.decision-publish:hover { opacity: .88; }
+/* 编辑卡右上角模式徽章：进行中(蓝灰) vs 已归档(暗) */
+.decision-mode-badge { font-style: normal; font-size: 11px; font-weight: 600; padding: 3px 9px; border: 1px solid var(--line); white-space: nowrap; }
+.decision-mode-badge.draft { color: var(--up); border-color: currentColor; }
+.decision-mode-badge.published { color: var(--gray); background: var(--paper-soft); }
+/* 归档时间线行内删除按钮：默认弱化，悬停转朱砂 */
+.history-delete-btn:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
 button.decision-signal { width: 100%; text-align: left; font: inherit; color: inherit; }
 .decision-signal em.decision-signal-status { font-style: normal; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .decision-attr-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; border: 1px solid var(--line); padding: 10px 12px; background: var(--paper-soft); }
