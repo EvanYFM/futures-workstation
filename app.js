@@ -12,8 +12,10 @@ const state = {
   historySymbol: null,
   railCollapsed: false,
   manifest: null,
-  decisions: [],
-  activeDecisionId: null,
+  /* 卡片生命周期（2026-09-16 重设计）：统一为 observation 单一模型
+     draft（进行中，可反复保存）→ published（已平仓归档，固定）
+     旧 decisions/localStorage 体系退役，由 HistoryStore 迁移为 observation */
+  pendingDraft: null,
   decisionSector: "all",
   decisionSymbol: "all",
   decisionPage: 1,
@@ -53,16 +55,6 @@ const CORE_GROUPS = [
   ["家人品种", ["FG", "SA", "AO", "SH"]],
   ["农产品", ["M", "JD", "LH", "P", "RU"]],
 ];
-const DECISION_STORAGE_KEY = "futuresResearchDecisions.v1";
-
-function loadDecisions() {
-  try { return JSON.parse(localStorage.getItem(DECISION_STORAGE_KEY) || "[]"); }
-  catch { return []; }
-}
-
-function saveDecisions() {
-  localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(state.decisions));
-}
 
 function brokerGroupLabel(entry) {
   if (entry.broker === "中信期货") return "亏损机构（特殊）";
@@ -704,68 +696,117 @@ function orderDecisionSignals(items) {
   return [...bullish.slice(0, 5), ...bearish.slice(0, 5), ...[...bullish.slice(5), ...bearish.slice(5), ...neutral].sort((a, b) => Math.abs(numeric(b.amountSignal)) - Math.abs(numeric(a.amountSignal)))];
 }
 
-function upsertDecision(symbol) {
-  const item = currentSnapshot().instruments.find((entry) => entry.symbol === symbol);
-  if (!item) return;
-  const id = `${state.date}-${symbol}`;
-  let record = state.decisions.find((entry) => entry.id === id);
-  if (!record) {
-    record = {
-      id, reportDate: state.date, symbol, variety: item.variety, sector: item.sector,
-      runId: state.manifest?.runId || state.date, createdAt: new Date().toISOString(),
-      amountSignal: item.amountSignal, handsSignal: item.handsSignal,
-      close: item.quote?.close ?? null, changePct: item.quote?.changePct ?? null,
-      trend: item.trend?.temperature || "", brokerRanking: item.brokerRanking,
-      tradeStatus: "no_trade", direction: "", mainContradiction: "",
-      trigger: "", positionPct: "", invalidation: "", closeNote: "", pnl: "",
-      attribution: {}, reviewNote: "",
-    };
-    state.decisions.push(record);
-  }
-  state.activeDecisionId = id;
-  saveDecisions();
-  renderDecisionView();
-}
-
+/* ===================== 复盘卡生命周期 =====================
+   一张卡 = 一条 observation。draft（保存，持仓/观察中，可反复改）
+   → published（发布 = 平仓归档，固定在下方时间线）→ 删除（墓碑，跨设备生效）。
+   保存不入归档视图；发布时校验平仓记录与最大错误；老数据按状态推导。 */
 function decisionStatusLabel(status) {
   return ({no_trade: "未交易", open: "持仓中", closed: "已平仓"})[status] || "未交易";
 }
 
-/* 保存复盘时同步写入品种历史操作回看（IndexedDB + 内存缓存），保证下方时间线即时更新 */
-function syncDecisionToHistory(record) {
-  if (typeof HistoryStore === "undefined") return;
-  const dateText = record.reportDate ? `${record.reportDate.slice(0, 4)}-${record.reportDate.slice(4, 6)}-${record.reportDate.slice(6, 8)}` : "";
-  const observation = {
-    id: `ws-${record.id}`,
-    source: "工作台日志",
-    kind: "observation",
-    date: dateText,
-    variety: record.variety || "",
-    symbol: record.symbol || "",
-    contract: null, strike: null,
-    instrumentType: null, optionType: null, moneyness: null,
-    direction: record.direction || null,
-    strategySource: "自己",
-    executed: record.tradeStatus !== "no_trade",
-    tradeStatus: record.tradeStatus,
-    positionPct: record.positionPct || "",
-    myPnl: record.pnl === "" || record.pnl == null ? null : numeric(record.pnl),
-    pnlRatio: null,
-    strategyPnlText: "",
-    noTradeReason: "",
-    stopLossTakeProfit: record.invalidation || "",
-    trigger: record.trigger || "",
-    ratings: {},
-    attribution: record.attribution || {},
-    review: [record.mainContradiction, record.closeNote, record.reviewNote, record.selfInquiry ? `自我问答：${record.selfInquiry}` : ""].filter(Boolean).join("\n"),
-    selfInquiry: record.selfInquiry || "",
-    raw: "",
+function obsStatus(item) {
+  if (item.deleted) return "deleted";
+  if (item.status) return item.status;
+  /* 老数据推导：工作台来源已平仓视为已归档，其余视为进行中；导入的历史记录天然已归档 */
+  if (item.source === "工作台日志" || item.source === "工作台决策") return item.tradeStatus === "closed" ? "published" : "draft";
+  return "published";
+}
+
+function journalObservations() {
+  return (state.history?.observations || []).filter((item) => !item.deleted && item.kind !== "trade");
+}
+
+function findDraftCard(symbol) {
+  return journalObservations().find((item) => item.symbol === symbol && obsStatus(item) === "draft") || null;
+}
+
+function observationEvidence(item) {
+  /* 归档卡/草稿卡的当日席位证据：记录内置优先，缺失则回当期快照补 */
+  const snapshotItem = state.data.snapshots?.[compactDate(item.date)]?.instruments.find((entry) => entry.symbol === item.symbol);
+  return item.brokerRanking || snapshotItem?.brokerRanking || {netLong: [], netShort: []};
+}
+
+function compactDate(dateText) {
+  return String(dateText || "").replace(/-/g, "");
+}
+
+/* 点品种：已有进行中的卡 → 直接打开那张（一品种一卡）；否则进入新卡编辑（首次保存才落库） */
+function openOrCreateCard(symbol) {
+  state.editingObservationId = null;
+  state.pendingDraft = null;
+  const existing = findDraftCard(symbol);
+  if (existing) {
+    state.editingObservationId = existing.id;
+    renderDecisionView();
+    return;
+  }
+  const item = currentSnapshot().instruments.find((entry) => entry.symbol === symbol);
+  if (!item) return;
+  const dateText = `${state.date.slice(0, 4)}-${state.date.slice(4, 6)}-${state.date.slice(6, 8)}`;
+  state.pendingDraft = {
+    id: `ws-${symbol}-${Date.now().toString(36)}`,
+    source: "工作台日志", kind: "observation",
+    date: dateText, variety: item.variety, symbol: symbol,
+    contract: null, strike: null, instrumentType: null, optionType: null, moneyness: null,
+    direction: null, strategySource: "自己",
+    executed: false, tradeStatus: "no_trade",
+    positionPct: "", myPnl: null, pnlRatio: null, strategyPnlText: "",
+    noTradeReason: "", stopLossTakeProfit: "", trigger: "",
+    ratings: {}, attribution: null, review: "",
+    mainContradiction: "", closeNote: "", reviewNote: "", selfInquiry: "",
+    status: "draft",
+    createdAt: new Date().toISOString(),
+    amountSignal: item.amountSignal, handsSignal: item.handsSignal,
+    close: item.quote?.close ?? null, changePct: item.quote?.changePct ?? null,
+    trend: item.trend?.temperature || "", brokerRanking: item.brokerRanking,
   };
-  HistoryStore.putObservation(observation);
+  renderDecisionView();
+}
+
+/* 表单字段 → observation 字段（草稿保存与发布共用一套采集） */
+function collectFormIntoObservation(base, form) {
+  const values = Object.fromEntries(new FormData(form));
+  const attribution = {};
+  [["judgment", "判断错?"], ["timing", "时机错?"], ["position", "仓位错?"], ["tool", "工具错?"], ["execution", "执行错?"]].forEach(([key, label]) => {
+    if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
+  });
+  const out = {...base};
+  out.tradeStatus = values.tradeStatus;
+  out.executed = values.tradeStatus !== "no_trade";
+  out.direction = values.direction;
+  out.mainContradiction = values.mainContradiction.trim();
+  out.trigger = values.trigger.trim();
+  out.positionPct = values.positionPct.trim();
+  out.stopLossTakeProfit = values.stopLossTakeProfit.trim();
+  out.closeNote = values.closeNote.trim();
+  out.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
+  out.noTradeReason = values.noTradeReason.trim();
+  out.reviewNote = values.reviewNote.trim();
+  out.selfInquiry = values.selfInquiry.trim();
+  out.review = values.review.trim();
+  out.attribution = Object.keys(attribution).length ? attribution : null;
+  out.editedAt = new Date().toISOString();
+  return {out, values};
+}
+
+/* 删除：写墓碑（deleted:true + updated 时间戳）经 putObservation 同步到私有仓，
+   其他设备合并时新者胜 → 不会复活。此前直接从缓存移除的做法，远端副本会在
+   下次同步时重新出现——这正是「删除无法跨设备」的隐性 bug，此处一并修复。 */
+function deleteObservationCard(id) {
+  const item = findObservation(id);
+  if (!item) return;
+  if (!window.confirm(`确认删除「${item.variety || item.symbol || id}」这条复盘？\n删除会同步到云端（其他设备同步后同样消失），不可恢复。`)) return;
+  HistoryStore.putObservation({...item, deleted: true});
+  if (state.editingObservationId === id) state.editingObservationId = null;
+  if (state.pendingDraft && state.pendingDraft.id === id) state.pendingDraft = null;
+  renderDecisionView();
+  renderHistoryView();
+  renderCloudSyncStatus();
 }
 
 function renderDecisionView() {
-  if (state.editingObservationId) { renderObservationEditor(); return; }
+  /* 编辑器打开时也照常刷新信号区/列表区（撤回发布等操作会改变信号状态标签），仅编辑器本身走表单渲染 */
+  const editing = !!(state.editingObservationId || state.pendingDraft);
   const instruments = [...currentSnapshot().instruments];
   const sectors = [...new Set(instruments.map((item) => item.sector))].sort();
   $("#decisionSectorFilter").innerHTML = `<option value="all">全部板块</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}" ${state.decisionSector === sector ? "selected" : ""}>${escapeHtml(sector)}</option>`).join("")}`;
@@ -777,73 +818,82 @@ function renderDecisionView() {
   const pageCount = Math.max(1, Math.ceil(signals.length / 10));
   state.decisionPage = Math.min(state.decisionPage, pageCount);
   const pageSignals = signals.slice((state.decisionPage - 1) * 10, state.decisionPage * 10);
+  const cards = journalObservations();
   $("#decisionSignals").innerHTML = signals.length ? pageSignals.map((item) => {
-    const record = state.decisions.find((entry) => entry.id === `${state.date}-${item.symbol}`);
-    const status = record ? decisionStatusLabel(record.tradeStatus) : "未记录";
-    const statusCls = record?.tradeStatus === "open" ? "bull-text" : record?.tradeStatus === "closed" ? "bear-text" : "neutral-text";
+    const draft = cards.find((entry) => entry.symbol === item.symbol && obsStatus(entry) === "draft");
+    const published = cards.some((entry) => entry.symbol === item.symbol && obsStatus(entry) === "published");
+    const status = draft ? decisionStatusLabel(draft.tradeStatus) : published ? "已归档" : "未记录";
+    const statusCls = draft?.tradeStatus === "open" ? "bull-text" : "neutral-text";
     return `<button class="decision-signal ${dirClass(item.amountSignal)}" data-open-decision="${escapeHtml(item.symbol)}"><div><strong>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</strong><small>${formatAmount(item.amountSignal)} · ${formatHands(item.handsSignal)} 手</small></div><em class="decision-signal-status ${statusCls}">${status}</em></button>`;
   }).join("") + (pageCount > 1 ? `<nav class="decision-pagination" aria-label="决策品种分页">${Array.from({length: pageCount}, (_, index) => `<button class="${state.decisionPage === index + 1 ? "is-active" : ""}" data-decision-page="${index + 1}">${index + 1}</button>`).join("")}</nav>` : "") : `<div class="detail-empty">当前筛选条件下没有品种。</div>`;
 
-  const records = [...state.decisions].sort((a, b) => b.reportDate.localeCompare(a.reportDate) || a.symbol.localeCompare(b.symbol));
-  $("#decisionList").innerHTML = records.length ? records.map((record) => `<button class="decision-list-item ${record.id === state.activeDecisionId ? "is-active" : ""}" data-edit-decision="${escapeHtml(record.id)}"><span><strong>${escapeHtml(record.variety)} ${escapeHtml(record.symbol)}</strong><small>${formatDate(record.reportDate)}${record.direction ? ` · ${record.direction === "空" ? "做空" : "做多"}` : ""}</small></span><em>${decisionStatusLabel(record.tradeStatus)}</em></button>`).join("") : `<div class="detail-empty">尚无日志记录，点上方任一品种开始。</div>`;
+  /* 进行中的复盘卡：保存未发布的草稿，按最近编辑排序 */
+  const drafts = cards.filter((entry) => obsStatus(entry) === "draft").sort((a, b) => (b.editedAt || b.createdAt || "").localeCompare(a.editedAt || a.createdAt || ""));
+  $("#decisionList").innerHTML = drafts.length ? drafts.map((entry) => `<button class="decision-list-item" data-edit-observation="${escapeHtml(entry.id)}"><span><strong>${escapeHtml(entry.variety || "")} ${escapeHtml(entry.symbol || "")}</strong><small>${escapeHtml(entry.date || "")}${entry.direction ? ` · ${entry.direction === "空" ? "做空" : "做多"}` : ""}${entry.positionPct ? ` · 仓位 ${escapeHtml(entry.positionPct)}` : ""}</small></span><em>${decisionStatusLabel(entry.tradeStatus)}</em></button>`).join("") : `<div class="detail-empty">尚无进行中的复盘：点上方任一品种开始，保存后这里持续跟踪，发布后归档到下方记录。</div>`;
 
-  const record = state.decisions.find((entry) => entry.id === state.activeDecisionId);
-  if (!record) {
-    $("#decisionEditor").innerHTML = `<div class="detail-empty">点击上方任一品种，开始写当天的交易日志。</div>`;
-    return;
-  }
-  const snapshotItem = state.data.snapshots[record.reportDate]?.instruments.find((item) => item.symbol === record.symbol);
-  const ranking = record.brokerRanking || snapshotItem?.brokerRanking || {netLong: [], netShort: []};
-  const option = (value, label, current) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`;
-  const attrField = (key, label) => `<label>${label}<select name="attr_${key}">${option("", "—", (record.attribution || {})[label])}${option("Y", "Y", (record.attribution || {})[label])}${option("N", "N", (record.attribution || {})[label])}</select></label>`;
-  const attribution = record.attribution || {};
-  $("#decisionEditor").innerHTML = `<form id="decisionForm"><header><div><small>${formatDate(record.reportDate)} · ${escapeHtml(record.runId)}</small><h3>${escapeHtml(record.variety)} ${escapeHtml(record.symbol)}</h3></div><div class="decision-market-facts"><strong class="${signClass(record.amountSignal)}">${formatAmount(record.amountSignal)}</strong><strong class="${record.changePct == null ? "" : signClass(record.changePct)}">${record.changePct == null ? "涨跌 暂无" : `${formatSigned(record.changePct, 2)}%`}</strong></div></header>
-    <div class="decision-facts"><span>手数 ${formatHands(record.handsSignal)}</span><span>收盘 ${formatPrice(record.close)}</span><span>趋势 ${escapeHtml(record.trend || "暂无")}</span></div>
-    <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
-    <div class="decision-form-grid">
-      <label>交易状态<select name="tradeStatus">${option("no_trade","未交易",record.tradeStatus)}${option("open","持仓中",record.tradeStatus)}${option("closed","已平仓",record.tradeStatus)}</select></label>
-      <label>方向<select name="direction">${option("", "未定", record.direction)}${option("多", "做多", record.direction)}${option("空", "做空", record.direction)}</select></label>
-      <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="为什么值得做，最关键的支撑和反向证据是什么">${escapeHtml(record.mainContradiction)}</textarea></label>
-      <label>入场触发<input name="trigger" value="${escapeHtml(record.trigger)}" placeholder="价格或技术条件"></label>
-      <label>仓位（占总仓位比例）<input name="positionPct" value="${escapeHtml(record.positionPct)}" placeholder="如 30%"></label>
-      <label>失效 / 止损<input name="invalidation" value="${escapeHtml(record.invalidation)}" placeholder="错在哪里退出"></label>
-      <label>平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(record.closeNote)}</textarea></label>
-      <label>盈亏（元，选填）<input name="pnl" type="number" step="any" value="${escapeHtml(String(record.pnl ?? ""))}" placeholder="亏损填负数"></label>
-      <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因（复盘）</span>${attrField("judgment","判断错？")}${attrField("timing","时机错？")}${attrField("position","仓位错？")}${attrField("tool","工具错？")}${attrField("execution","执行错？")}</div>
-      <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误：&#10;下一次只改：">${escapeHtml(record.reviewNote)}</textarea></label>
-      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(record.selfInquiry || "")}</textarea></label>
-    </div><p id="decisionFormMessage" class="form-message" aria-live="polite"></p><div class="decision-form-actions"><button class="decision-save" type="submit">保存复盘</button><button class="decision-delete" type="button" data-delete-decision="${escapeHtml(record.id)}">删除</button></div></form>`;
+  if (editing) renderObservationEditor();
+  else $("#decisionEditor").innerHTML = `<div class="detail-empty">点击上方品种开始新的复盘，或从左侧继续进行中的复盘卡；已发布的记录在下方归档时间线里修订。</div>`;
 }
 
-/* ===================== 历史复盘修订(编辑已有 observation) =====================
-   直接修订 observation 本体(非 decision 体系):保留原记录全部字段,只覆盖复盘相关字段,
-   经 HistoryStore.putObservation 写回(IndexedDB + 私有仓云同步,updated 新者胜)。
-   适用场景:Excel/月度复盘当时没填完整,事后补盈亏、归因、认知偏差等。 */
+/* ===================== 复盘卡编辑器（新草稿 / 继续草稿 / 修订已归档） =====================
+   三种模式共用一套表单字段：
+   - 草稿（含未落库的新卡）：保存 / 发布归档 / 删除
+   - 已归档：保存修订 / 撤回发布（转回草稿）/ 删除
+   经 HistoryStore.putObservation 写回(IndexedDB + 私有仓云同步,updated 新者胜)。 */
 function findObservation(id) {
   return (state.history?.observations || []).find((item) => item.id === id) || null;
 }
 
+function currentEditingCard() {
+  if (state.pendingDraft) return state.pendingDraft;
+  return findObservation(state.editingObservationId);
+}
+
 function startObservationEdit(id) {
   if (!findObservation(id)) return;
+  state.pendingDraft = null;
   state.editingObservationId = id;
   switchView("decisions");
   requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: "smooth", block: "start"}));
 }
 
 function renderObservationEditor() {
-  const item = findObservation(state.editingObservationId);
-  if (!item) { state.editingObservationId = null; renderDecisionView(); return; }
+  const item = currentEditingCard();
+  if (!item) { state.editingObservationId = null; state.pendingDraft = null; renderDecisionView(); return; }
+  const mode = obsStatus(item) === "published" ? "published" : "draft";
+  const isNew = !!state.pendingDraft;
   const option = (value, label, current) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`;
   const tradeStatus = item.tradeStatus || (item.executed ? "closed" : "no_trade");
   const attr = item.attribution || {};
   const attrField = (key, label) => `<label>${label}<select name="attr_${key}">${option("", "—", attr[label])}${option("Y", "Y", attr[label])}${option("N", "N", attr[label])}</select></label>`;
+  /* 草稿模式下「已平仓」由发布动作触发，不放在交易状态里手动选 */
+  const statusOptions = mode === "draft"
+    ? `${option("no_trade", "未交易", tradeStatus)}${option("open", "持仓中", tradeStatus)}`
+    : `${option("no_trade", "未交易", tradeStatus)}${option("open", "持仓中", tradeStatus)}${option("closed", "已平仓", tradeStatus)}`;
+  const modeBadge = mode === "published"
+    ? `<em class="decision-mode-badge published">已归档</em>`
+    : `<em class="decision-mode-badge draft">${decisionStatusLabel(tradeStatus)} · 进行中</em>`;
+  const dueText = mode === "draft"
+    ? `保存 = 继续观察（可随时回来改，不入下方归档）；发布 = 确认已平仓，归档并固定到下方记录（可撤回）。`
+    : `修订只覆盖下面填写的字段，原记录其余信息全部保留；保存后写入本地并同步私有数据仓。`;
+  const ranking = observationEvidence(item);
+  const actions = mode === "draft"
+    ? `<button class="decision-save" type="submit">保存</button>
+       <button class="decision-publish" type="button" data-publish-observation="${escapeHtml(item.id)}">发布归档</button>
+       <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
+       ${isNew ? `<button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button>` : ""}`
+    : `<button class="decision-save" type="submit">保存修订</button>
+       <button class="decision-delete" type="button" data-unpublish-observation="${escapeHtml(item.id)}">撤回发布</button>
+       <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
+       <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button>`;
   $("#decisionEditor").innerHTML = `<form id="observationForm" data-obs-id="${escapeHtml(item.id)}">
-    <header><div><small>修订复盘 · ${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
+    <header><div><small>${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
     <h3>${escapeHtml(item.variety || "")} ${escapeHtml(item.symbol || "")}</h3></div>
-    <div class="decision-market-facts"><em class="decision-signal-status">${item.executed ? "已执行" : "未执行"}</em></div></header>
-    <p class="decision-due">修订只覆盖下面填写的字段,原记录其余信息全部保留;保存后写入本地并同步私有数据仓。</p>
+    <div class="decision-market-facts">${modeBadge}</div></header>
+    <p class="decision-due">${dueText}</p>
+    <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
     <div class="decision-form-grid">
-      <label>交易状态<select name="tradeStatus">${option("no_trade","未交易",tradeStatus)}${option("open","持仓中",tradeStatus)}${option("closed","已平仓",tradeStatus)}</select></label>
+      <label>交易状态<select name="tradeStatus">${statusOptions}</select></label>
       <label>方向<select name="direction">${option("", "未定", item.direction || "")}${option("多", "做多", item.direction || "")}${option("空", "做空", item.direction || "")}</select></label>
       <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="为什么值得做,最关键的支撑和反向证据是什么">${escapeHtml(item.mainContradiction || "")}</textarea></label>
       <label>入场触发<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="价格或技术条件"></label>
@@ -858,8 +908,7 @@ function renderObservationEditor() {
       <label class="wide">复盘与认知偏差原文<textarea name="review" rows="4">${escapeHtml(item.review || "")}</textarea></label>
     </div>
     <p id="observationFormMessage" class="form-message" aria-live="polite"></p>
-    <div class="decision-form-actions"><button class="decision-save" type="submit">保存修订</button>
-    <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button></div>
+    <div class="decision-form-actions">${actions}</div>
   </form>`;
 }
 
@@ -990,6 +1039,7 @@ function renderHistoryEntry(item) {
       ${item.strategySource ? `<span class="history-strategy-source">参考来源：${escapeHtml(item.strategySource)}</span>` : ""}
       <em class="history-exec-flag">${item.executed ? "已执行" : "未执行"}</em>
       <button class="history-edit-btn" type="button" data-edit-observation="${escapeHtml(item.id)}" title="修订这条复盘(补填盈亏/归因/认知偏差)">编辑</button>
+      <button class="history-edit-btn history-delete-btn" type="button" data-delete-observation="${escapeHtml(item.id)}" title="删除这条复盘(本地+云端,不可恢复)">删除</button>
     </header>
     ${historyPlanRows(item)}
     ${pnl.text ? `<div class="history-pnl ${pnl.cls}">${escapeHtml(pnl.text)}</div>` : ""}
@@ -1005,9 +1055,11 @@ function renderHistoryEntry(item) {
 function renderHistoryView() {
   const history = state.history;
   if (!history) return;
-  const observations = history.observations || [];
+  /* 归档视图：只显示已发布（published）记录——进行中的草稿卡留在上方工作区，不混入历史 */
+  const observations = (history.observations || []).filter((item) => !item.deleted && obsStatus(item) === "published");
   const trades = history.trades || [];
   const months = history.months || [];
+  const drafts = (history.observations || []).filter((item) => !item.deleted && obsStatus(item) === "draft");
 
   const executedObs = observations.filter((item) => item.executed);
   const myPnlTotal = executedObs.reduce((sum, item) => sum + (item.myPnl || 0), 0) + trades.reduce((sum, item) => sum + (item.myPnl || 0), 0);
@@ -1019,6 +1071,7 @@ function renderHistoryView() {
     summaryCard("观察（未执行）", observations.length - executedObs.length, "参考他人策略或自身观察记录"),
     summaryCard("已执行盈亏合计", `${formatSigned(myPnlTotal, 0)} 元`, "仅统计本人实际执行记录", myPnlTotal > 0 ? "bull-text" : myPnlTotal < 0 ? "bear-text" : ""),
     summaryCard("月度复盘合计", `${formatSigned(monthPnlTotal, 0)} 元`, `${months.length} 个月（${escapeHtml(months.map((month) => month.label).join("/"))}）`, monthPnlTotal > 0 ? "bull-text" : monthPnlTotal < 0 ? "bear-text" : ""),
+    summaryCard("进行中的复盘", drafts.length, "保存未发布的持仓/观察卡（不在归档）", ""),
   ].join("") + (history.errors && history.errors.length ? `<div class="detail-source-notice">部分数据源导入失败：${escapeHtml(history.errors.join("；"))}</div>` : "");
 
   const groups = {};
@@ -1163,59 +1216,48 @@ function bindEvents() {
       renderInstrumentTable();
     }
     const openDecision = event.target.closest("[data-open-decision]");
-    if (openDecision) upsertDecision(openDecision.dataset.openDecision);
+    if (openDecision) openOrCreateCard(openDecision.dataset.openDecision);
     const decisionPage = event.target.closest("[data-decision-page]");
     if (decisionPage) { state.decisionPage = numeric(decisionPage.dataset.decisionPage); renderDecisionView(); }
-    const editDecision = event.target.closest("[data-edit-decision]");
-    if (editDecision) { state.activeDecisionId = editDecision.dataset.editDecision; renderDecisionView(); }
     const createDecision = event.target.closest("[data-create-decision]");
-    if (createDecision) { upsertDecision(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: "smooth"}); }
-    const deleteDecision = event.target.closest("[data-delete-decision]");
-    if (deleteDecision) { state.decisions = state.decisions.filter((entry) => entry.id !== deleteDecision.dataset.deleteDecision); state.activeDecisionId = null; saveDecisions(); renderDecisionView(); }
+    if (createDecision) { openOrCreateCard(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: "smooth"}); }
     const historySymbol = event.target.closest("[data-history-symbol]");
     if (historySymbol) { state.historyJournalSymbol = historySymbol.dataset.historySymbol; renderHistoryView(); }
     const editObs = event.target.closest("[data-edit-observation]");
     if (editObs) startObservationEdit(editObs.dataset.editObservation);
-    if (event.target.closest("[data-cancel-observation-edit]")) { state.editingObservationId = null; renderDecisionView(); }
+    if (event.target.closest("[data-cancel-observation-edit]")) { state.editingObservationId = null; state.pendingDraft = null; renderDecisionView(); }
+    const deleteObs = event.target.closest("[data-delete-observation]");
+    if (deleteObs) deleteObservationCard(deleteObs.dataset.deleteObservation);
+    const publishObs = event.target.closest("[data-publish-observation]");
+    if (publishObs) publishObservationCard(publishObs.dataset.publishObservation);
+    const unpublishObs = event.target.closest("[data-unpublish-observation]");
+    if (unpublishObs) unpublishObservationCard(unpublishObs.dataset.unpublishObservation);
   });
+  /* 观察卡表单提交 = 保存（草稿/修订），发布走独立按钮（先校验平仓信息再确认） */
   $("#decisionEditor").addEventListener("submit", (event) => {
     if (event.target.id !== "observationForm") return;
     event.preventDefault();
-    const item = findObservation(state.editingObservationId);
+    const item = currentEditingCard();
     if (!item) return;
     const form = event.target;
-    const values = Object.fromEntries(new FormData(form));
     const message = $("#observationFormMessage");
-    const attribution = {};
-    [["judgment", "判断错?"], ["timing", "时机错?"], ["position", "仓位错?"], ["tool", "工具错?"], ["execution", "执行错?"]].forEach(([key, label]) => {
-      if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
-    });
-    const updated = {...item};
-    updated.tradeStatus = values.tradeStatus;
-    updated.executed = values.tradeStatus !== "no_trade";
-    updated.direction = values.direction;
-    updated.mainContradiction = values.mainContradiction.trim();
-    updated.trigger = values.trigger.trim();
-    updated.positionPct = values.positionPct.trim();
-    updated.stopLossTakeProfit = values.stopLossTakeProfit.trim();
-    updated.closeNote = values.closeNote.trim();
-    updated.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
-    updated.noTradeReason = values.noTradeReason.trim();
-    updated.reviewNote = values.reviewNote.trim();
-    updated.selfInquiry = values.selfInquiry.trim();
-    updated.review = values.review.trim();
-    updated.attribution = Object.keys(attribution).length ? attribution : null;
-    updated.editedAt = new Date().toISOString();
+    const {out: updated, values} = collectFormIntoObservation(item, form);
     if (values.tradeStatus === "closed" && !values.closeNote.trim()) {
       message.textContent = "已平仓必须填写平仓记录。";
       return;
     }
-    if (updated.executed && !updated.review.trim() && updated.myPnl == null) {
+    if (values.tradeStatus === "closed" && !values.reviewNote.trim()) {
+      message.textContent = "已平仓必须写最大错误与下一条规则。";
+      return;
+    }
+    if (obsStatus(item) === "published" && updated.executed && !updated.review.trim() && updated.myPnl == null) {
+      /* 仅归档卡修订时要求补全：草稿阶段持仓中，盈亏/复盘可后补 */
       message.textContent = "已执行记录至少补填盈亏或复盘内容之一。";
       return;
     }
     HistoryStore.putObservation(updated);
     state.editingObservationId = null;
+    state.pendingDraft = null;
     renderDecisionView();
     renderHistoryView();
     renderCloudSyncStatus();
@@ -1238,27 +1280,43 @@ function bindEvents() {
   $("#ctaSearchInput").addEventListener("input", (event) => { state.ctaQuery = event.target.value; renderCta(); });
   $("#ctaSectorFilter").addEventListener("change", (event) => { state.ctaSector = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaDirectionFilter").addEventListener("change", (event) => { state.ctaDirection = event.target.value; state.activeCtaSymbol = null; renderCta(); });
-  $("#decisionEditor").addEventListener("submit", (event) => {
-    if (event.target.id !== "decisionForm") return;
-    event.preventDefault();
-    const record = state.decisions.find((entry) => entry.id === state.activeDecisionId);
-    if (!record) return;
-    const values = Object.fromEntries(new FormData(event.target));
-    const message = $("#decisionFormMessage");
-    const attribution = {};
-    [["judgment", "判断错？"], ["timing", "时机错？"], ["position", "仓位错？"], ["tool", "工具错？"], ["execution", "执行错？"]].forEach(([key, label]) => {
-      if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
-    });
-    if (values.tradeStatus === "closed" && !values.closeNote.trim()) { message.textContent = "已平仓必须填写平仓记录。"; return; }
-    if (values.tradeStatus === "closed" && !values.reviewNote.trim()) { message.textContent = "已平仓必须写最大错误与下一条规则。"; return; }
-    Object.assign(record, values, {attribution, updatedAt: new Date().toISOString()});
-    delete record.attr_judgment; delete record.attr_timing; delete record.attr_position; delete record.attr_tool; delete record.attr_execution;
-    saveDecisions();
-    syncDecisionToHistory(record);
-    renderDecisionView();
-    renderHistoryView();
-    if (message) message.textContent = "";
-  });
+}
+
+/* 发布归档：平仓闭环动作。校验平仓记录 + 最大错误必填（沿用既有规则），
+   tradeStatus 置为 closed、status 置为 published，卡固定进入下方时间线 */
+function publishObservationCard(id) {
+  const item = currentEditingCard();
+  if (!item || item.id !== id) return;
+  const form = $("#observationForm");
+  if (!form) return;
+  const message = $("#observationFormMessage");
+  const {out: updated} = collectFormIntoObservation(item, form);
+  if (!updated.closeNote.trim()) { message.textContent = "发布前必须填写平仓记录（平仓过程与是否按计划执行）。"; return; }
+  if (!updated.reviewNote.trim()) { message.textContent = "发布前必须写最大错误与下一条规则。"; return; }
+  if (!window.confirm(`确认发布「${item.variety || item.symbol}」？\n发布 = 该品种已平仓，此卡将固定到下方归档记录（之后仍可撤回或修订）。`)) return;
+  updated.tradeStatus = "closed";
+  updated.executed = true;
+  updated.status = "published";
+  updated.publishedAt = new Date().toISOString();
+  HistoryStore.putObservation(updated);
+  state.editingObservationId = null;
+  state.pendingDraft = null;
+  renderDecisionView();
+  renderHistoryView();
+  renderCloudSyncStatus();
+  setTimeout(renderCloudSyncStatus, 2500);
+}
+
+/* 撤回发布：误发布的安全阀——转回进行中的草稿卡，回到上方工作区继续编辑 */
+function unpublishObservationCard(id) {
+  const item = findObservation(id);
+  if (!item) return;
+  if (!window.confirm(`撤回发布「${item.variety || item.symbol}」？\n此卡将转回「进行中的复盘」，重新回到可编辑状态。`)) return;
+  const updated = {...item, status: "draft", tradeStatus: "open", publishedAt: null, editedAt: new Date().toISOString()};
+  HistoryStore.putObservation(updated);
+  renderDecisionView();
+  renderHistoryView();
+  renderCloudSyncStatus();
 }
 
 /* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
@@ -1320,7 +1378,6 @@ Promise.all([
   .then(([data, manifest, history]) => {
     state.data = data;
     state.manifest = manifest;
-    state.decisions = loadDecisions();
     state.date = data.latestDate;
     state.history = history || {observations: [], trades: [], narratives: [], months: [], errors: []};
     state.activeSymbol = data.snapshots[data.latestDate].tripleResonance[0]?.symbol || data.snapshots[data.latestDate].instruments[0]?.symbol;
