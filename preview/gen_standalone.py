@@ -4,8 +4,9 @@
 
 用途：聊天沙箱内相对 fetch 全挂，必须单文件（内联 CSS/JS + fetch 垫片）。
 - 精简真实快照（8 个核心品种）嵌入垫片，保证总览/详情/CTA 视图可渲染
-- 垫 data/imported/user_journal.json：一张 draft 卡（沪金 AU 持仓中）+
-  一张 published 卡（焦煤 JM 已平仓归档），直接演示三动作生命周期
+- 垫 data/imported/user_journal.json：draft 卡（沪金 AU 持仓中）+
+  published 卡（焦煤 JM 已平仓归档）+ 两条「未知」记录（一条缺日期、
+  一条有日期，演示品种匹配/日期匹配与一级交易状态显隐）
 - 输出：preview/futures-workstation-review-lifecycle.html
 
 再生成：python3 preview/gen_standalone.py（改代码后重跑，输出覆盖）
@@ -48,7 +49,7 @@ def demo_journal() -> dict:
         }
     return {
         "exportedAt": "2026-09-17T04:00:00.000Z",
-        "generator": "standalone-preview", "version": 2, "count": 2,
+        "generator": "standalone-preview", "version": 2, "count": 4,
         "observations": [
             {   # 演示：进行中的草稿卡（持仓中，反复保存观察）
                 "id": "ws-AU-demo1", "source": "工作台日志", "kind": "observation",
@@ -80,6 +81,33 @@ def demo_journal() -> dict:
                 "selfInquiry": "平仓时腿软想提前跑的是恐惧，扛着不平的是执著；两者都不是行情给的信号。",
                 "review": "", "attribution": {"时机错?": "N"},
                 "ratings": {}, **evidence(jm),
+            },
+            {   # 演示：月度复盘导入的「未知」记录（无品种，有日期）→ 品种匹配演示
+                "id": "md-demo-unknown-1", "source": "月度复盘md", "kind": "observation",
+                "date": "2026-08-01", "variety": "未知", "symbol": "",
+                "contract": None, "strike": None, "instrumentType": None, "optionType": None, "moneyness": None,
+                "direction": "空", "strategySource": "自己", "executed": True, "tradeStatus": "closed",
+                "status": "published", "createdAt": "2026-08-01T09:00:00.000Z",
+                "publishedAt": "2026-08-01T09:00:00.000Z", "editedAt": "2026-08-01T09:00:00.000Z",
+                "positionPct": "10%",
+                "mainContradiction": "月度复盘原文：油脂板块高升水 + 席位净空扩散，逢反弹布空。",
+                "trigger": "反弹至区间上沿布空", "stopLossTakeProfit": "突破前高止损",
+                "closeNote": "月末按计划离场。", "myPnl": -5200, "noTradeReason": "",
+                "reviewNote": "最大错误：入场偏早，等确认信号。下一次只改：等突破回踩再进。",
+                "selfInquiry": "", "review": "（原文略）", "attribution": {"判断错?": "Y"},
+                "ratings": {},
+            },
+            {   # 演示：缺日期 + 未交易（no_trade）→ 日期匹配 + 状态显隐演示
+                "id": "md-demo-unknown-2", "source": "月度复盘md", "kind": "observation",
+                "date": "", "variety": "未知", "symbol": "",
+                "contract": None, "strike": None, "instrumentType": None, "optionType": None, "moneyness": None,
+                "direction": "", "strategySource": "自己", "executed": False, "tradeStatus": "no_trade",
+                "status": "published", "createdAt": "2026-09-01T09:00:00.000Z",
+                "publishedAt": "2026-09-01T09:00:00.000Z", "editedAt": "2026-09-01T09:00:00.000Z",
+                "positionPct": "", "mainContradiction": "想等回调进多，但价格直接走了，没有追。",
+                "noTradeReason": "入场点不合适，宁可错过不做追单。",
+                "closeNote": "", "myPnl": None, "reviewNote": "", "selfInquiry": "", "review": "",
+                "attribution": None, "ratings": {},
             },
         ],
     }

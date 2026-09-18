@@ -728,6 +728,8 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .form-message { color: var(--up); font-weight: 600; }
 .decision-save { min-height: 34px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600; }
 .decision-save:hover { opacity: .88; }
+/* 草稿选「已平仓」后提交按钮即发布动作，用朱砂色与普通保存区分 */
+.decision-save.decision-publish { border-color: var(--cinnabar); background: var(--cinnabar); }
 .decision-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .decision-delete { min-height: 34px; margin-top: 10px; padding: 0 12px; border: 1px solid var(--line); background: var(--paper); color: var(--gray); font-size: 11px; }
 .decision-delete:hover { color: var(--down); border-color: var(--down); }
@@ -774,7 +776,19 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .history-summary { margin-bottom: 20px; }
 .history-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 26px; align-items: start; }
 /* 花园目录样式:一条静止竖轨 + 圆点节点;当前项朱砂实心点;无滚动条,列表自然展开 */
-.history-symbol-list { display: grid; gap: 0; border-left: 1px solid var(--line); position: static; max-height: none; overflow: visible; }
+.history-symbol-list { display: grid; gap: 0; border-left: 1px solid var(--line); position: static; max-height: none; overflow: visible; align-content: start; }
+/* 品种选择器：搜索 + 下拉筛选（替代整列品种清单） */
+.history-symbol-picker { display: grid; gap: 8px; padding: 11px 4px 11px 22px; }
+.history-symbol-picker input, .history-symbol-picker select {
+  width: 100%; padding: 7px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 11px;
+}
+.history-symbol-picker input:focus, .history-symbol-picker select:focus { outline: none; border-color: var(--line-strong); }
+.history-symbol-hint { margin: 0; color: var(--gray); font-size: 10px; }
+/* 交易状态一级选择 + 品种/日期匹配行 */
+.decision-form-grid label.status-primary select { font-size: 12px; font-weight: 600; }
+.decision-match { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.decision-match select, .decision-match input[type="date"] { flex: 1; min-width: 180px; padding: 7px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
+.decision-match .decision-attr-title { white-space: nowrap; }
 .history-symbol-item {
   position: relative;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px;
