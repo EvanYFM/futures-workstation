@@ -789,6 +789,17 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .decision-match { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .decision-match select, .decision-match input[type="date"] { flex: 1; min-width: 180px; padding: 7px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
 .decision-match .decision-attr-title { white-space: nowrap; }
+/* 日期匹配：弹层日历触发钮（样式对齐表单输入框） */
+.decision-match .decision-match-date {
+  flex: 1; min-width: 180px; padding: 7px 9px; text-align: left;
+  border: 1px dashed var(--line-strong); background: var(--paper); color: var(--gray);
+  font-size: 11px; cursor: pointer;
+}
+.decision-match .decision-match-date:hover { border-color: var(--cinnabar); color: var(--ink); }
+.decision-match .decision-match-date.has-value { border-style: solid; color: var(--ink); }
+/* 通用日历弹层：fixed 定位跟随锚点，视觉沿用顶栏日历 */
+.cal-pop { position: fixed; top: 0; left: 0; width: 264px; box-shadow: 0 12px 30px rgba(0, 0, 0, .16); }
+.cal-pop .cal-day.is-selected { background: var(--cinnabar); color: var(--paper); }
 .history-symbol-item {
   position: relative;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px;

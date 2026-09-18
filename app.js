@@ -26,6 +26,7 @@ const state = {
   historyJournalSymbol: null,
   historyJournalQuery: "",
   journalGroupsCache: [],
+  pendingMatchDate: null,
   ctaQuery: "",
   ctaSector: "all",
   ctaDirection: "all",
@@ -855,6 +856,7 @@ function currentEditingCard() {
 function startObservationEdit(id) {
   if (!findObservation(id)) return;
   state.pendingDraft = null;
+  state.pendingMatchDate = null;
   state.editingObservationId = id;
   switchView("decisions");
   requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: "smooth", block: "start"}));
@@ -889,9 +891,10 @@ function renderObservationEditor() {
   const matchBlock = !symbolMatched && instruments.length
     ? `<div class="decision-match wide"><span class="decision-attr-title">品种匹配</span><select name="matchSymbol">${instruments.map((entry) => `<option value="${escapeHtml(entry.symbol)}" ${entry.symbol === item.symbol ? "selected" : ""}>${escapeHtml(entry.variety)} ${escapeHtml(entry.symbol)}${knownSymbols.has(entry.symbol) ? "（已有记录）" : "（未加）"}</option>`).join("")}</select><button class="history-edit-btn" type="button" data-match-observation="${escapeHtml(item.id)}">归入该品种</button></div>`
     : "";
-  /* 日期匹配：导入记录缺日期（显示「日期缺失」）时，可在此补上真实日期 */
+  /* 日期匹配：导入记录缺日期（显示「日期缺失」）时，弹层日历选择后补上。
+     选中的日期暂存 pendingMatchDate，点「设为该日期」才写入。 */
   const dateBlock = !item.date
-    ? `<div class="decision-match wide"><span class="decision-attr-title">日期匹配</span><input type="date" name="matchDate" value="${escapeHtml(item.date || "")}"><button class="history-edit-btn" type="button" data-match-date="${escapeHtml(item.id)}">设为该日期</button></div>`
+    ? `<div class="decision-match wide"><span class="decision-attr-title">日期匹配</span><button type="button" class="decision-match-date" data-cal-anchor="1">${escapeHtml(state.pendingMatchDate || "点击选择日期")}</button><button class="history-edit-btn" type="button" data-match-date="${escapeHtml(item.id)}">设为该日期</button></div>`
     : "";
 
   /* 字段按状态增减：未交易 = 方向/核心逻辑/未交易原因；
@@ -1277,6 +1280,12 @@ function bindEvents() {
     if (matchObs) matchObservationToSymbol(matchObs.dataset.matchObservation);
     const matchDate = event.target.closest("[data-match-date]");
     if (matchDate) matchObservationDate(matchDate.dataset.matchDate);
+    const calAnchor = event.target.closest("[data-cal-anchor]");
+    if (calAnchor) openCalendar({
+      anchor: calAnchor,
+      value: state.pendingMatchDate || "",
+      onPick: (dk) => { state.pendingMatchDate = dk; calAnchor.textContent = dk; calAnchor.classList.add("has-value"); },
+    });
     const unpublishObs = event.target.closest("[data-unpublish-observation]");
     if (unpublishObs) unpublishObservationCard(unpublishObs.dataset.unpublishObservation);
   });
@@ -1374,18 +1383,84 @@ function matchObservationToSymbol(id) {
   renderCloudSyncStatus();
 }
 
-/* 日期匹配：给缺日期的记录补上真实日期（时间线按日期排序，补齐后归位） */
+/* 日期匹配：给缺日期的记录补上真实日期（时间线按日期排序，补齐后归位）。
+   日期来自弹层日历（pendingMatchDate），不再用手动输入——原生 date 输入
+   年月日未拼完整时 value 恒为空串，点确认会静默无效。 */
 function matchObservationDate(id) {
   const item = findObservation(id);
-  const form = $("#observationForm");
-  if (!item || !form) return;
-  const date = form.querySelector('input[name="matchDate"]')?.value;
-  if (!date) return;
-  if (item.date === date) return;
+  if (!item) return;
+  const date = state.pendingMatchDate;
+  if (!date) {
+    const message = $("#observationFormMessage");
+    if (message) message.textContent = "请先在日历弹层里选好日期，再点「设为该日期」。";
+    return;
+  }
+  if (item.date === date) { state.pendingMatchDate = null; return; }
   HistoryStore.putObservation({...item, date, editedAt: new Date().toISOString()});
+  state.pendingMatchDate = null;
   renderDecisionView();
   renderHistoryView();
   renderCloudSyncStatus();
+}
+
+/* ===================== 通用日历弹层 =====================
+   与总览页顶栏日历同款视觉（.cal / .cal-nav / .cal-day），区别：
+   任意日期可选、回调自定义、fixed 定位跟随锚点。全局只存在一个实例。 */
+let calendarPanel = null;
+function closeCalendar() {
+  if (!calendarPanel) return;
+  calendarPanel.remove();
+  document.removeEventListener("click", calendarOutside, true);
+  calendarPanel = null;
+}
+function calendarOutside(event) {
+  if (calendarPanel && !calendarPanel.contains(event.target)) closeCalendar();
+}
+function openCalendar({anchor, value, onPick}) {
+  closeCalendar();
+  const panel = document.createElement("div");
+  panel.className = "cal cal-pop";
+  const pad = (n) => String(n).padStart(2, "0");
+  const today = new Date();
+  let vy = value ? +value.slice(0, 4) : today.getFullYear();
+  let vm = value ? +value.slice(5, 7) - 1 : today.getMonth();
+  const head = document.createElement("div"); head.className = "cal-head";
+  const prev = document.createElement("button"); prev.type = "button"; prev.className = "cal-nav"; prev.textContent = "‹"; prev.setAttribute("aria-label", "上一月");
+  const title = document.createElement("strong");
+  const next = document.createElement("button"); next.type = "button"; next.className = "cal-nav"; next.textContent = "›"; next.setAttribute("aria-label", "下一月");
+  head.append(prev, title, next);
+  const week = document.createElement("div"); week.className = "cal-grid cal-week";
+  week.innerHTML = "<span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>";
+  const days = document.createElement("div"); days.className = "cal-grid cal-days";
+  const render = () => {
+    title.textContent = vy + "年" + (vm + 1) + "月";
+    days.innerHTML = "";
+    const first = new Date(vy, vm, 1).getDay();
+    const total = new Date(vy, vm + 1, 0).getDate();
+    for (let i = 0; i < first; i++) days.appendChild(document.createElement("span"));
+    for (let d = 1; d <= total; d++) {
+      const dk = vy + "-" + pad(vm + 1) + "-" + pad(d);
+      const day = document.createElement("button");
+      day.type = "button"; day.className = "cal-day"; day.textContent = d;
+      const dow = new Date(vy, vm, d).getDay();
+      if (dow === 0 || dow === 6) day.classList.add("weekend");
+      if (dk === value) day.classList.add("is-selected");
+      day.addEventListener("click", () => { closeCalendar(); onPick(dk); });
+      days.appendChild(day);
+    }
+  };
+  prev.addEventListener("click", () => { vm--; if (vm < 0) { vm = 11; vy--; } render(); });
+  next.addEventListener("click", () => { vm++; if (vm > 11) { vm = 0; vy++; } render(); });
+  panel.append(head, week, days);
+  document.body.appendChild(panel);
+  render();
+  const rect = anchor.getBoundingClientRect();
+  const width = 264, height = 322;
+  panel.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + "px";
+  /* fixed 定位：锚点下方放不下就翻到上方 */
+  panel.style.top = (rect.bottom + height + 6 < window.innerHeight ? rect.bottom + 6 : Math.max(8, rect.top - height - 6)) + "px";
+  calendarPanel = panel;
+  setTimeout(() => document.addEventListener("click", calendarOutside, true), 0);
 }
 
 /* 撤回发布：误发布的安全阀——转回进行中的草稿卡，回到上方工作区继续编辑 */
