@@ -69,3 +69,12 @@ Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGE
    此后转录一律跳过。）
 3. 已发布的历史数据不回溯修改；自下一次「更新XX日数据」起，快照 universe 不再含 PF/PR/BC，
    THS 转录不再产出上述 16 品种行。
+
+## 2026-09-18 执行记录（WorkBuddy）
+
+- 全流程发布：58 商品/62 CTA（PF/PR/BC 剔除规则首日生效；BZ 回归）、行情 59/59、保证金 59/59、seatFlow 8/8、技术面 0/6（东财接口抽风，标缺失）、50 单测全过、check_public_artifacts 62 dates latest 20260918。私有仓 `67780e9`、公开仓 `d02d6c1`。
+- 今日无用户截图：THS CSV 仅 SC/EC 两行（`transcribe_ths_20260918.py`，行情取 qhkch 概览：SC 728 -7.28%、EC 2172.5 -1.94%）。宇宙行行情走 AKShare/新浪 ✓。
+- **BZ 处置（新路径 SEAT_BOARD_UNPUBLISHED）**：纯苯主力已移仓 bz2611，机构 broker 追踪页有真实持仓（国泰君安 3727/4521 等 16 行），但 variety 排名板未公布（qhkch 渲染不稳，时有时无占位/空）。build 新增 SEAT_BOARD_UNPUBLISHED={BZ}：validate 豁免 + rankings 从机构 contract_rows 补充 + 主力合约以机构行为准（margin 表滞后仍写 bz2610）。BZ netShort 国泰君安 -794 领衔已上线；排名板恢复后可将 BZ 移出该集合。
+- Cookie 第 4 次过期续期一次通过（63468）。
+- 部署仓远端有用户网页端提交（复盘页 review 卡片 3 commits），已 pull --rebase 同步后再发布。
+- run-manifest 护栏发布前核验通过（20260918/62）。
