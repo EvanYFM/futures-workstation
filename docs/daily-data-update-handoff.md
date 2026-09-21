@@ -78,3 +78,10 @@ Pages强制门禁待管理员激活：Source改GitHub Actions，仓库变量PAGE
 - Cookie 第 4 次过期续期一次通过（63468）。
 - 部署仓远端有用户网页端提交（复盘页 review 卡片 3 commits），已 pull --rebase 同步后再发布。
 - run-manifest 护栏发布前核验通过（20260918/62）。
+
+## 2026-09-21 执行记录（WorkBuddy，周一延迟数据日）
+
+- 全流程发布：58 商品/62 CTA、行情新浪 59/59、保证金 59/59、seatFlow 8/8、技术面 4/6、50 单测全过、check_public_artifacts 63 dates latest 20260921。私有仓 `589243f`、公开仓 `734ac0b`。
+- **周一延迟数据日特征（两条）**：① AKShare 新浪日线收盘后更新慢，首跑 31/59、半小时后重试 36/59，仍缺 23 品种（宇宙行 return_10d/20d/30d/monthly 与交叉校验缺失，close/chg 由新浪 59/59 兜底不受影响）；晚间日线齐全后可 `REPORT_DATE=20260921 REBUILD_SNAPSHOT=1` 重建补全。② qhkch 概览日度数据仍为上周五（20260918），SC/EC 行情改用 AKShare futures_zh_daily_sina 直取（sc2611 722.5 -0.76%、ec2610 2197.0 +1.13%）。
+- BZ SEAT_BOARD_UNPUBLISHED 路径复用成功（netShort 国泰君安领衔）。PF/PR/BC 剔除规则持续生效。
+- Cookie 第 5 次过期续期一次通过（65469）。
