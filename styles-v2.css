@@ -353,22 +353,16 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .broker-highlight-row span small { margin-top: 1px; color: var(--gray); font-size: 8px; }
 .broker-highlight-row > strong { text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* ================= 总览 · 股指/情绪/状态 ================= */
+/* ================= 总览 · 天气/情绪/状态 ================= */
 .overview-band { min-width: 0; }
 .overview-split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 22px; margin-top: 40px; }
-.weather-list, .index-list { margin-top: 12px; background: var(--paper); border: 1px solid var(--line); }
+.weather-list { margin-top: 12px; background: var(--paper); border: 1px solid var(--line); }
 .weather-row { display: grid; grid-template-columns: 84px 92px minmax(0, 1fr) 74px; gap: 12px; align-items: start; padding: 9px 13px; border-top: 1px solid var(--line); font-size: 11px; }
-.weather-row:first-child, .index-row:first-child { border-top: 0; }
+.weather-row:first-child { border-top: 0; }
 .risk-level { display: inline-flex; justify-content: center; padding: 1px 7px; font-size: 10px; border: 1px solid var(--line); white-space: nowrap; }
 .risk-level.high { color: var(--up); border-color: var(--up); background: var(--up-soft); }
 .risk-level.medium { color: var(--neutral); border-color: var(--neutral); background: var(--neutral-soft); }
 .weather-reason { color: var(--gray); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.index-row { display: grid; grid-template-columns: minmax(120px, 1fr) 108px 140px; gap: 16px; align-items: center; padding: 11px 13px; border-top: 1px solid var(--line); }
-.index-name strong { display: block; font: 600 13px/1.4 var(--serif); }
-.index-name small { color: var(--gray); }
-.index-change, .index-value { text-align: right; font-variant-numeric: tabular-nums; }
-.index-change small, .index-value small { display: block; margin-bottom: 2px; color: var(--gray); font-size: 9px; }
-.index-change strong, .index-value strong { font-size: 13px; }
 
 .sentiment-panel { margin-top: 10px; padding: 14px; background: var(--paper); border: 1px solid var(--line); }
 .sentiment-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
@@ -728,20 +722,8 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .form-message { color: var(--up); font-weight: 600; }
 .decision-save { min-height: 34px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); font-size: 11px; font-weight: 600; }
 .decision-save:hover { opacity: .88; }
-/* 草稿选「已平仓」后提交按钮即发布动作，用朱砂色与普通保存区分 */
-.decision-save.decision-publish { border-color: var(--cinnabar); background: var(--cinnabar); }
 .decision-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .decision-delete { min-height: 34px; margin-top: 10px; padding: 0 12px; border: 1px solid var(--line); background: var(--paper); color: var(--gray); font-size: 11px; }
-.decision-delete:hover { color: var(--down); border-color: var(--down); }
-/* 发布归档主按钮：朱砂色系（--cinnabar），与保存(墨色)形成语义区分 */
-.decision-publish { min-height: 34px; margin-top: 10px; padding: 0 16px; border: 1px solid var(--cinnabar); background: var(--cinnabar); color: var(--paper); font-size: 11px; font-weight: 600; }
-.decision-publish:hover { opacity: .88; }
-/* 编辑卡右上角模式徽章：进行中(蓝灰) vs 已归档(暗) */
-.decision-mode-badge { font-style: normal; font-size: 11px; font-weight: 600; padding: 3px 9px; border: 1px solid var(--line); white-space: nowrap; }
-.decision-mode-badge.draft { color: var(--up); border-color: currentColor; }
-.decision-mode-badge.published { color: var(--gray); background: var(--paper-soft); }
-/* 归档时间线行内删除按钮：默认弱化，悬停转朱砂 */
-.history-delete-btn:hover { color: var(--cinnabar); border-color: var(--cinnabar); }
 button.decision-signal { width: 100%; text-align: left; font: inherit; color: inherit; }
 .decision-signal em.decision-signal-status { font-style: normal; font-size: 12px; font-weight: 600; white-space: nowrap; }
 .decision-attr-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; border: 1px solid var(--line); padding: 10px 12px; background: var(--paper-soft); }
@@ -776,31 +758,7 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .history-summary { margin-bottom: 20px; }
 .history-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: 26px; align-items: start; }
 /* 花园目录样式:一条静止竖轨 + 圆点节点;当前项朱砂实心点;无滚动条,列表自然展开 */
-.history-symbol-list { display: grid; gap: 0; border-left: 1px solid var(--line); position: static; max-height: none; overflow: visible; align-content: start; }
-/* 品种选择器：搜索 + 下拉筛选（替代整列品种清单） */
-.history-symbol-picker { display: grid; gap: 8px; padding: 11px 4px 11px 22px; }
-.history-symbol-picker input, .history-symbol-picker select {
-  width: 100%; padding: 7px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font-size: 11px;
-}
-.history-symbol-picker input:focus, .history-symbol-picker select:focus { outline: none; border-color: var(--line-strong); }
-.history-symbol-hint { margin: 0; color: var(--gray); font-size: 10px; }
-/* 交易状态一级选择 + 品种/日期匹配行 */
-.decision-form-grid label.status-primary select { font-size: 12px; font-weight: 600; }
-.decision-match { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.decision-match select, .decision-match input[type="date"] { flex: 1; min-width: 180px; padding: 7px 9px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); }
-.decision-match .decision-attr-title { white-space: nowrap; }
-/* 日期匹配：弹层日历触发钮（样式对齐表单输入框） */
-.decision-match .decision-match-date {
-  flex: 1; min-width: 180px; padding: 7px 9px; text-align: left;
-  border: 1px dashed var(--line-strong); background: var(--paper); color: var(--gray);
-  font-size: 11px; cursor: pointer;
-}
-.decision-match .decision-match-date:hover { border-color: var(--cinnabar); color: var(--ink); }
-.decision-match .decision-match-date.has-value { border-style: solid; color: var(--ink); }
-/* 通用日历弹层：fixed 定位跟随锚点，视觉沿用顶栏日历。
-   注意双类选择器：必须压过 .cal 基类的 absolute 定位（基类在表更后方） */
-.cal.cal-pop { position: fixed; top: 0; left: 0; width: 264px; box-shadow: 0 12px 30px rgba(0, 0, 0, .16); }
-.cal.cal-pop .cal-day.is-selected { background: var(--cinnabar); color: var(--paper); }
+.history-symbol-list { display: grid; gap: 0; border-left: 1px solid var(--line); position: static; max-height: none; overflow: visible; }
 .history-symbol-item {
   position: relative;
   display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px;
@@ -1112,10 +1070,9 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   /* flex-shrink:0 会让导航永远不收窄,小屏必须允许占满整行再换行 */
   .site-nav { flex: 1 1 100%; flex-wrap: wrap; gap: 6px 16px; }
   .nav-item { font-size: 13px; }
-  /* 全景席位条与股指行:固定最小列宽之和(≈400px)超出小屏,压缩模板 */
+  /* 全景席位条:固定最小列宽之和超出小屏,压缩模板 */
   .group-bars { min-width: 0; }
   .group-line { grid-template-columns: 18px minmax(0, 1fr) 54px; gap: 5px; }
-  .index-row { grid-template-columns: minmax(0, 1fr) 84px 112px; gap: 8px; }
 }
 
 .netflow-grid, .seatflow-grid { display: grid; gap: 14px; }

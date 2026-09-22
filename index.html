@@ -25,7 +25,7 @@
     - 设计 token 见 styles-v2.css 头部;旧版配色变量在此处做别名映射(--bull→--up 等)
     - 字体走系统栈(--serif/--sans 已含 PingFang/雅黑回退),不请求外网字体,国内首屏无阻塞
   -->
-  <link rel="stylesheet" href="./styles-v2.css?v=20260916lifecycle">
+  <link rel="stylesheet" href="./styles-v2.css?v=20260922220143">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">
@@ -126,16 +126,8 @@
         </div>
         <div id="brokerHighlights" class="broker-highlights"></div>
 
-        <section class="overview-band">
-          <div class="section-heading compact">
-            <div><span class="section-index">七</span><h2>股指观察</h2></div>
-            <p>股指期货资金与现货指数涨跌分列,不参与商品共振统计</p>
-          </div>
-          <div id="stockIndexList" class="index-list"></div>
-        </section>
-
         <div class="section-heading">
-          <div><span class="section-index">八</span><h2>快照与来源状态</h2></div>
+          <div><span class="section-index">七</span><h2>快照与来源状态</h2></div>
           <p>所有日期独立固化;旧来源不冒充当日事实</p>
         </div>
         <div id="overviewStatus" class="overview-status"></div>
@@ -184,7 +176,7 @@
       <section id="view-cta" class="view" aria-labelledby="cta-title">
         <div class="section-heading top-heading">
           <div><span class="section-index">十</span><h2 id="cta-title">CTA 截面评分</h2></div>
-          <p>量价、席位存量、席位边际、基差仓单与期权偏度按可用权重重算;股指为独立板块</p>
+          <p>量价、席位存量、席位边际、基差仓单与期权偏度按可用权重重算</p>
         </div>
         <div class="filter-bar">
           <select id="ctaSectorFilter" aria-label="选择 CTA 板块"><option value="all">全部板块</option></select>
@@ -202,7 +194,7 @@
       <section id="view-decisions" class="view" aria-labelledby="decision-title">
         <div class="section-heading top-heading">
           <div><span class="section-index">十三</span><h2 id="decision-title">交易日志</h2></div>
-          <p>先选交易状态，表单随之增减；选「已平仓」保存 = 发布归档，固定到下方记录（可撤回）；删除 = 本地与云端一并移除</p>
+          <p>工作站快照 → 人工确认 → 一页复盘 → 下一次只改一条</p>
         </div>
         <div class="filter-bar decision-filter-bar">
           <select id="decisionSectorFilter" aria-label="按板块筛选决策品种"><option value="all">全部板块</option></select>
@@ -211,7 +203,7 @@
         </div>
         <div id="decisionSignals" class="decision-signals"></div>
         <div class="decision-layout">
-          <section class="decision-list-shell"><h3>进行中的复盘</h3><div id="decisionList"></div></section>
+          <section class="decision-list-shell"><h3>决策记录</h3><div id="decisionList"></div></section>
           <section id="decisionEditor" class="decision-editor"></section>
         </div>
         <div class="section-heading top-heading">
@@ -221,7 +213,7 @@
             <button id="cloudSyncBtn" class="history-export-btn" type="button" title="配置或使用 GitHub Token,把复盘同步到私有数据仓(跨设备)">🔐 云端同步</button>
             <button id="exportUserJournalBtn" class="history-export-btn" type="button" title="备用通道:把工作台新写的复盘导出为 JSON">📤 导出备份</button>
           </div>
-          <p>已发布的复盘按品种归档;同一品种的开仓、加仓、减仓、平仓串成时间线;进行中的卡片只留在上方工作区</p>
+          <p>导入的 Excel 交易日志与月度复盘按品种聚合;同一品种的开仓、加仓、减仓、平仓串成时间线</p>
         </div>
         <div id="historySummary" class="summary-strip history-summary"></div>
         <div class="history-layout">
@@ -325,8 +317,8 @@
       });
     })();
   </script>
-  <script src="./history-store.js?v=20260916lifecycle" defer></script>
-  <script src="./journal-sync.js?v=20260916lifecycle" defer></script>
-  <script src="./app.js?v=20260916lifecycle" defer></script>
+  <script src="./history-store.js?v=20260922220143" defer></script>
+  <script src="./journal-sync.js?v=20260922220143" defer></script>
+  <script src="./app.js?v=20260922220143" defer></script>
 </body>
 </html>

@@ -86,10 +86,7 @@ const HistoryStore = (() => {
     return putMany(STORES.meta, [{key, value}]);
   }
 
-  /* 老决策记录（localStorage futuresResearchDecisions.v1）→ observation 迁移。
-     2026-09-16 重设计：全字段映射 + 生命周期状态（已平仓→published 归档，
-     持仓/未交易→draft 进行中）。不设 updated（=0），已存在的同 id 记录
-     （如曾经 syncDecisionToHistory 写过的）不会被覆盖；原始 localStorage 不删。 */
+  /* localStorage 老决策记录 -> observation。只做映射，原数据保留不删。 */
   function migrateLocalStorageDecisions() {
     let legacy = [];
     try { legacy = JSON.parse(localStorage.getItem("futuresResearchDecisions.v1") || "[]"); }
@@ -106,31 +103,18 @@ const HistoryStore = (() => {
       strike: null,
       instrumentType: null,
       optionType: null,
-      moneyness: null,
-      direction: record.direction || null,
+      direction: null,
       strategySource: "自己",
       executed: record.tradeStatus !== "no_trade",
-      tradeStatus: record.tradeStatus || "no_trade",
-      status: record.tradeStatus === "closed" ? "published" : "draft",
-      positionPct: record.positionPct || "",
-      myPnl: record.pnl === "" || record.pnl == null ? null : record.pnl,
+      myPnl: null,
       pnlRatio: null,
       strategyPnlText: "",
       choice: record.choice || "",
+      tradeStatus: record.tradeStatus || "no_trade",
+      review: [record.mainContradiction, record.exitResult, record.reviewNote].filter(Boolean).join("\n"),
       noTradeReason: record.noTradeReason || "",
-      stopLossTakeProfit: record.invalidation || "",
-      trigger: record.trigger || "",
-      mainContradiction: record.mainContradiction || "",
-      closeNote: record.closeNote || "",
-      reviewNote: record.reviewNote || "",
-      selfInquiry: record.selfInquiry || "",
-      attribution: record.attribution || {},
-      review: [record.mainContradiction, record.closeNote, record.reviewNote, record.selfInquiry ? `自我问答：${record.selfInquiry}` : ""].filter(Boolean).join("\n"),
+      stopLossTakeProfit: "",
       ratings: {},
-      amountSignal: record.amountSignal, handsSignal: record.handsSignal,
-      close: record.close ?? null, changePct: record.changePct ?? null,
-      trend: record.trend || "", brokerRanking: record.brokerRanking,
-      createdAt: record.createdAt || "",
       raw: "",
     }));
   }
@@ -350,15 +334,15 @@ const HistoryStore = (() => {
     return {unsynced: unsynced, lastPushAt: lastPushAt};
   }
 
-  /* 导出：只包含本地工作台新写的 observation（source=工作台日志），不含静态
-     Excel/md 导入项与已删除的墓碑记录，避免推送时重复/复活。Agent 收到后追加到
+  /* 导出：只包含本地工作台新写的 observation（source=工作台日志），
+     不含静态 Excel/md 导入项，避免推送时重复。Agent 收到后追加到
      data/imported/user_journal.json，下次刷新页面自动展示 */
   function exportUserJournal() {
-    const items = cache.observations.filter((item) => item.source === "工作台日志" && !item.deleted);
+    const items = cache.observations.filter((item) => item.source === "工作台日志");
     return {
       exportedAt: new Date().toISOString(),
       generator: "trading-system research_dashboard",
-      version: 2,
+      version: 1,
       count: items.length,
       observations: items,
     };

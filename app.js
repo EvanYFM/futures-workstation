@@ -12,10 +12,8 @@ const state = {
   historySymbol: null,
   railCollapsed: false,
   manifest: null,
-  /* 卡片生命周期（2026-09-16 重设计）：统一为 observation 单一模型
-     draft（进行中，可反复保存）→ published（已平仓归档，固定）
-     旧 decisions/localStorage 体系退役，由 HistoryStore 迁移为 observation */
-  pendingDraft: null,
+  decisions: [],
+  activeDecisionId: null,
   decisionSector: "all",
   decisionSymbol: "all",
   decisionPage: 1,
@@ -24,9 +22,6 @@ const state = {
   history: null,
   // state.historySymbol 已被「历史回看」页面占用，此处必须用独立字段名
   historyJournalSymbol: null,
-  historyJournalQuery: "",
-  journalGroupsCache: [],
-  pendingMatchDate: null,
   ctaQuery: "",
   ctaSector: "all",
   ctaDirection: "all",
@@ -58,6 +53,16 @@ const CORE_GROUPS = [
   ["家人品种", ["FG", "SA", "AO", "SH"]],
   ["农产品", ["M", "JD", "LH", "P", "RU"]],
 ];
+const DECISION_STORAGE_KEY = "futuresResearchDecisions.v1";
+
+function loadDecisions() {
+  try { return JSON.parse(localStorage.getItem(DECISION_STORAGE_KEY) || "[]"); }
+  catch { return []; }
+}
+
+function saveDecisions() {
+  localStorage.setItem(DECISION_STORAGE_KEY, JSON.stringify(state.decisions));
+}
 
 function brokerGroupLabel(entry) {
   if (entry.broker === "中信期货") return "亏损机构（特殊）";
@@ -156,7 +161,7 @@ function renderTide() {
   }).join("");
 }
 
-/* 四 净持仓分布变化：全商品按当日资金净流入/流出排序取前五（剔除股指/国债） */
+/* 四 净持仓分布变化：全商品按当日资金净流入/流出排序取前五（防御性剔除股指/国债） */
 function renderNetFlowChanges() {
   const items = currentSnapshot().instruments
     .filter((item) => {
@@ -281,15 +286,6 @@ function renderWeather() {
     <div class="weather-reason">${escapeHtml(item.types)} · ${escapeHtml(item.reason)}</div>
     <div class="weather-reflection">盘面：${escapeHtml(item.reflection || "待验证")}</div>
   </div>`).join("") : `<div class="detail-empty">该快照没有可用农业天气风险数据。</div>`;
-}
-
-function renderStockIndices() {
-  const rows = currentSnapshot().stockIndices;
-  $("#stockIndexList").innerHTML = rows.length ? rows.map((item) => `<div class="index-row">
-    <div class="index-name"><strong>${escapeHtml(item.variety)}</strong><small>${escapeHtml(item.symbol)}${item.trend ? ` · 趋势${escapeHtml(item.trend.temperature || "-")}${item.trend.fresh ? "" : "（旧）"}` : ""}</small></div>
-    <div class="index-change"><small>当日涨跌</small><strong class="${item.quote?.changePct == null ? "" : signClass(item.quote.changePct)}">${item.quote?.changePct == null ? "暂无" : `${formatSigned(item.quote.changePct, 2)}%`}</strong></div>
-    <div class="index-value ${item.hasFuturesFlow ? signClass(item.amountSignal) : ""}"><small>三方资金</small><strong>${item.hasFuturesFlow ? formatAmount(item.amountSignal) : "无期货席位流"}</strong></div>
-  </div>`).join("") : `<div class="detail-empty">该快照没有独立股指数据。</div>`;
 }
 
 function renderOverviewStatus() {
@@ -689,7 +685,7 @@ function renderStatus() {
   const fetchStatus = Object.entries(summary.fetchStatus).map(([key, value]) => `<div class="status-line"><span>${escapeHtml(key)}</span><strong>${value} 个席位</strong></div>`).join("");
   $("#statusPanel").innerHTML = `<section class="status-block"><h3>席位披露</h3><div class="status-list"><div class="status-line"><span>报告日期</span><strong>${formatDate(snapshot.date)}</strong></div><div class="status-line"><span>网页披露日</span><strong>${escapeHtml(snapshot.disclosureDates.join(" / ") || "未披露")}</strong></div>${fetchStatus}</div></section>
     <section class="status-block"><h3>保证金口径</h3><div class="status-list"><div class="status-line"><span>覆盖率</span><strong>${(summary.marginCoverage * 100).toFixed(1)}%</strong></div><div class="status-line"><span>来源更新</span><strong>${escapeHtml(summary.marginSourceUpdate || "未披露")}</strong></div><div class="status-line"><span>缓存状态</span><strong>${escapeHtml(summary.marginCacheNote || "未知")}</strong></div></div></section>
-    <section class="status-block"><h3>行情、趋势与基本面</h3><div class="status-list"><div class="status-line"><span>当日收盘行情</span><strong>${summary.quoteFreshCount || 0} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>当日趋势品种</span><strong>${summary.trendFreshCount} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>期现基差覆盖</span><strong>${summary.basisCoveredCount || 0} 个</strong></div><div class="status-line"><span>仓单覆盖</span><strong>${summary.warehouseCoveredCount || 0} 个</strong></div><div class="status-line"><span>股指独立观察</span><strong>${snapshot.stockIndices.length} 个</strong></div></div></section>`;
+    <section class="status-block"><h3>行情、趋势与基本面</h3><div class="status-list"><div class="status-line"><span>当日收盘行情</span><strong>${summary.quoteFreshCount || 0} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>当日趋势品种</span><strong>${summary.trendFreshCount} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>期现基差覆盖</span><strong>${summary.basisCoveredCount || 0} 个</strong></div><div class="status-line"><span>仓单覆盖</span><strong>${summary.warehouseCoveredCount || 0} 个</strong></div></div></section>`;
 }
 
 function orderDecisionSignals(items) {
@@ -699,118 +695,68 @@ function orderDecisionSignals(items) {
   return [...bullish.slice(0, 5), ...bearish.slice(0, 5), ...[...bullish.slice(5), ...bearish.slice(5), ...neutral].sort((a, b) => Math.abs(numeric(b.amountSignal)) - Math.abs(numeric(a.amountSignal)))];
 }
 
-/* ===================== 复盘卡生命周期 =====================
-   一张卡 = 一条 observation。draft（保存，持仓/观察中，可反复改）
-   → published（发布 = 平仓归档，固定在下方时间线）→ 删除（墓碑，跨设备生效）。
-   保存不入归档视图；发布时校验平仓记录与最大错误；老数据按状态推导。 */
+function upsertDecision(symbol) {
+  const item = currentSnapshot().instruments.find((entry) => entry.symbol === symbol);
+  if (!item) return;
+  const id = `${state.date}-${symbol}`;
+  let record = state.decisions.find((entry) => entry.id === id);
+  if (!record) {
+    record = {
+      id, reportDate: state.date, symbol, variety: item.variety, sector: item.sector,
+      runId: state.manifest?.runId || state.date, createdAt: new Date().toISOString(),
+      amountSignal: item.amountSignal, handsSignal: item.handsSignal,
+      close: item.quote?.close ?? null, changePct: item.quote?.changePct ?? null,
+      trend: item.trend?.temperature || "", brokerRanking: item.brokerRanking,
+      tradeStatus: "no_trade", direction: "", mainContradiction: "",
+      trigger: "", positionPct: "", invalidation: "", closeNote: "", pnl: "",
+      attribution: {}, reviewNote: "",
+    };
+    state.decisions.push(record);
+  }
+  state.activeDecisionId = id;
+  saveDecisions();
+  renderDecisionView();
+}
+
 function decisionStatusLabel(status) {
   return ({no_trade: "未交易", open: "持仓中", closed: "已平仓"})[status] || "未交易";
 }
 
-function obsStatus(item) {
-  if (item.deleted) return "deleted";
-  if (item.status) return item.status;
-  /* 老数据推导：工作台来源已平仓视为已归档，其余视为进行中；导入的历史记录天然已归档 */
-  if (item.source === "工作台日志" || item.source === "工作台决策") return item.tradeStatus === "closed" ? "published" : "draft";
-  return "published";
-}
-
-function journalObservations() {
-  return (state.history?.observations || []).filter((item) => !item.deleted && item.kind !== "trade");
-}
-
-function findDraftCard(symbol) {
-  return journalObservations().find((item) => item.symbol === symbol && obsStatus(item) === "draft") || null;
-}
-
-function observationEvidence(item) {
-  /* 归档卡/草稿卡的当日席位证据：记录内置优先，缺失则回当期快照补 */
-  const snapshotItem = state.data.snapshots?.[compactDate(item.date)]?.instruments.find((entry) => entry.symbol === item.symbol);
-  return item.brokerRanking || snapshotItem?.brokerRanking || {netLong: [], netShort: []};
-}
-
-function compactDate(dateText) {
-  return String(dateText || "").replace(/-/g, "");
-}
-
-/* 点品种：已有进行中的卡 → 直接打开那张（一品种一卡）；否则进入新卡编辑（首次保存才落库） */
-function openOrCreateCard(symbol) {
-  state.editingObservationId = null;
-  state.pendingDraft = null;
-  const existing = findDraftCard(symbol);
-  if (existing) {
-    state.editingObservationId = existing.id;
-    renderDecisionView();
-    return;
-  }
-  const item = currentSnapshot().instruments.find((entry) => entry.symbol === symbol);
-  if (!item) return;
-  const dateText = `${state.date.slice(0, 4)}-${state.date.slice(4, 6)}-${state.date.slice(6, 8)}`;
-  state.pendingDraft = {
-    id: `ws-${symbol}-${Date.now().toString(36)}`,
-    source: "工作台日志", kind: "observation",
-    date: dateText, variety: item.variety, symbol: symbol,
-    contract: null, strike: null, instrumentType: null, optionType: null, moneyness: null,
-    direction: null, strategySource: "自己",
-    executed: false, tradeStatus: "no_trade",
-    positionPct: "", myPnl: null, pnlRatio: null, strategyPnlText: "",
-    noTradeReason: "", stopLossTakeProfit: "", trigger: "",
-    ratings: {}, attribution: null, review: "",
-    mainContradiction: "", closeNote: "", reviewNote: "", selfInquiry: "",
-    status: "draft",
-    createdAt: new Date().toISOString(),
-    amountSignal: item.amountSignal, handsSignal: item.handsSignal,
-    close: item.quote?.close ?? null, changePct: item.quote?.changePct ?? null,
-    trend: item.trend?.temperature || "", brokerRanking: item.brokerRanking,
+/* 保存复盘时同步写入品种历史操作回看（IndexedDB + 内存缓存），保证下方时间线即时更新 */
+function syncDecisionToHistory(record) {
+  if (typeof HistoryStore === "undefined") return;
+  const dateText = record.reportDate ? `${record.reportDate.slice(0, 4)}-${record.reportDate.slice(4, 6)}-${record.reportDate.slice(6, 8)}` : "";
+  const observation = {
+    id: `ws-${record.id}`,
+    source: "工作台日志",
+    kind: "observation",
+    date: dateText,
+    variety: record.variety || "",
+    symbol: record.symbol || "",
+    contract: null, strike: null,
+    instrumentType: null, optionType: null, moneyness: null,
+    direction: record.direction || null,
+    strategySource: "自己",
+    executed: record.tradeStatus !== "no_trade",
+    tradeStatus: record.tradeStatus,
+    positionPct: record.positionPct || "",
+    myPnl: record.pnl === "" || record.pnl == null ? null : numeric(record.pnl),
+    pnlRatio: null,
+    strategyPnlText: "",
+    noTradeReason: "",
+    stopLossTakeProfit: record.invalidation || "",
+    trigger: record.trigger || "",
+    ratings: {},
+    attribution: record.attribution || {},
+    review: [record.mainContradiction, record.closeNote, record.reviewNote, record.selfInquiry ? `自我问答：${record.selfInquiry}` : ""].filter(Boolean).join("\n"),
+    selfInquiry: record.selfInquiry || "",
+    raw: "",
   };
-  renderDecisionView();
-}
-
-/* 表单字段 → observation 字段（草稿保存与发布共用一套采集） */
-/* 字段按交易状态显隐：只在表单里出现（未被隐藏）时才覆盖，其余保留原值。
-   「复盘与认知偏差原文」文本框已下线：不再接收输入，老记录的 review 原值保留。 */
-function collectFormIntoObservation(base, form) {
-  const values = Object.fromEntries(new FormData(form));
-  const attribution = {};
-  [["judgment", "判断错?"], ["timing", "时机错?"], ["position", "仓位错?"], ["tool", "工具错?"], ["execution", "执行错?"]].forEach(([key, label]) => {
-    if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
-  });
-  const out = {...base};
-  out.tradeStatus = values.tradeStatus;
-  out.executed = values.tradeStatus !== "no_trade";
-  out.direction = values.direction;
-  out.mainContradiction = (values.mainContradiction || "").trim();
-  if (values.trigger != null) out.trigger = values.trigger.trim();
-  if (values.positionPct != null) out.positionPct = values.positionPct.trim();
-  if (values.stopLossTakeProfit != null) out.stopLossTakeProfit = values.stopLossTakeProfit.trim();
-  if (values.closeNote != null) out.closeNote = values.closeNote.trim();
-  if (values.myPnl != null) out.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
-  if (values.noTradeReason != null) out.noTradeReason = values.noTradeReason.trim();
-  if (values.reviewNote != null) out.reviewNote = values.reviewNote.trim();
-  if (values.selfInquiry != null) out.selfInquiry = values.selfInquiry.trim();
-  out.attribution = values.attr_judgment != null ? (Object.keys(attribution).length ? attribution : null) : (base.attribution || null);
-  out.editedAt = new Date().toISOString();
-  return {out, values};
-}
-
-/* 删除：写墓碑（deleted:true + updated 时间戳）经 putObservation 同步到私有仓，
-   其他设备合并时新者胜 → 不会复活。此前直接从缓存移除的做法，远端副本会在
-   下次同步时重新出现——这正是「删除无法跨设备」的隐性 bug，此处一并修复。 */
-function deleteObservationCard(id) {
-  const item = findObservation(id);
-  if (!item) return;
-  if (!window.confirm(`确认删除「${item.variety || item.symbol || id}」这条复盘？\n删除会同步到云端（其他设备同步后同样消失），不可恢复。`)) return;
-  HistoryStore.putObservation({...item, deleted: true});
-  if (state.editingObservationId === id) state.editingObservationId = null;
-  if (state.pendingDraft && state.pendingDraft.id === id) state.pendingDraft = null;
-  renderDecisionView();
-  renderHistoryView();
-  renderCloudSyncStatus();
+  HistoryStore.putObservation(observation);
 }
 
 function renderDecisionView() {
-  /* 编辑器打开时也照常刷新信号区/列表区（撤回发布等操作会改变信号状态标签），仅编辑器本身走表单渲染 */
-  const editing = !!(state.editingObservationId || state.pendingDraft);
+  if (state.editingObservationId) { renderObservationEditor(); return; }
   const instruments = [...currentSnapshot().instruments];
   const sectors = [...new Set(instruments.map((item) => item.sector))].sort();
   $("#decisionSectorFilter").innerHTML = `<option value="all">全部板块</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}" ${state.decisionSector === sector ? "selected" : ""}>${escapeHtml(sector)}</option>`).join("")}`;
@@ -822,121 +768,89 @@ function renderDecisionView() {
   const pageCount = Math.max(1, Math.ceil(signals.length / 10));
   state.decisionPage = Math.min(state.decisionPage, pageCount);
   const pageSignals = signals.slice((state.decisionPage - 1) * 10, state.decisionPage * 10);
-  const cards = journalObservations();
   $("#decisionSignals").innerHTML = signals.length ? pageSignals.map((item) => {
-    const draft = cards.find((entry) => entry.symbol === item.symbol && obsStatus(entry) === "draft");
-    const published = cards.some((entry) => entry.symbol === item.symbol && obsStatus(entry) === "published");
-    const status = draft ? decisionStatusLabel(draft.tradeStatus) : published ? "已归档" : "未记录";
-    const statusCls = draft?.tradeStatus === "open" ? "bull-text" : "neutral-text";
+    const record = state.decisions.find((entry) => entry.id === `${state.date}-${item.symbol}`);
+    const status = record ? decisionStatusLabel(record.tradeStatus) : "未记录";
+    const statusCls = record?.tradeStatus === "open" ? "bull-text" : record?.tradeStatus === "closed" ? "bear-text" : "neutral-text";
     return `<button class="decision-signal ${dirClass(item.amountSignal)}" data-open-decision="${escapeHtml(item.symbol)}"><div><strong>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</strong><small>${formatAmount(item.amountSignal)} · ${formatHands(item.handsSignal)} 手</small></div><em class="decision-signal-status ${statusCls}">${status}</em></button>`;
   }).join("") + (pageCount > 1 ? `<nav class="decision-pagination" aria-label="决策品种分页">${Array.from({length: pageCount}, (_, index) => `<button class="${state.decisionPage === index + 1 ? "is-active" : ""}" data-decision-page="${index + 1}">${index + 1}</button>`).join("")}</nav>` : "") : `<div class="detail-empty">当前筛选条件下没有品种。</div>`;
 
-  /* 进行中的复盘卡：保存未发布的草稿，按最近编辑排序 */
-  const drafts = cards.filter((entry) => obsStatus(entry) === "draft").sort((a, b) => (b.editedAt || b.createdAt || "").localeCompare(a.editedAt || a.createdAt || ""));
-  $("#decisionList").innerHTML = drafts.length ? drafts.map((entry) => `<button class="decision-list-item" data-edit-observation="${escapeHtml(entry.id)}"><span><strong>${escapeHtml(entry.variety || "")} ${escapeHtml(entry.symbol || "")}</strong><small>${escapeHtml(entry.date || "")}${entry.direction ? ` · ${entry.direction === "空" ? "做空" : "做多"}` : ""}${entry.positionPct ? ` · 仓位 ${escapeHtml(entry.positionPct)}` : ""}</small></span><em>${decisionStatusLabel(entry.tradeStatus)}</em></button>`).join("") : `<div class="detail-empty">尚无进行中的复盘：点上方任一品种开始，保存后这里持续跟踪，发布后归档到下方记录。</div>`;
+  const records = [...state.decisions].sort((a, b) => b.reportDate.localeCompare(a.reportDate) || a.symbol.localeCompare(b.symbol));
+  $("#decisionList").innerHTML = records.length ? records.map((record) => `<button class="decision-list-item ${record.id === state.activeDecisionId ? "is-active" : ""}" data-edit-decision="${escapeHtml(record.id)}"><span><strong>${escapeHtml(record.variety)} ${escapeHtml(record.symbol)}</strong><small>${formatDate(record.reportDate)}${record.direction ? ` · ${record.direction === "空" ? "做空" : "做多"}` : ""}</small></span><em>${decisionStatusLabel(record.tradeStatus)}</em></button>`).join("") : `<div class="detail-empty">尚无日志记录，点上方任一品种开始。</div>`;
 
-  if (editing) renderObservationEditor();
-  else $("#decisionEditor").innerHTML = `<div class="detail-empty">点击上方品种开始新的复盘，或从左侧继续进行中的复盘卡；已发布的记录在下方归档时间线里修订。</div>`;
+  const record = state.decisions.find((entry) => entry.id === state.activeDecisionId);
+  if (!record) {
+    $("#decisionEditor").innerHTML = `<div class="detail-empty">点击上方任一品种，开始写当天的交易日志。</div>`;
+    return;
+  }
+  const snapshotItem = state.data.snapshots[record.reportDate]?.instruments.find((item) => item.symbol === record.symbol);
+  const ranking = record.brokerRanking || snapshotItem?.brokerRanking || {netLong: [], netShort: []};
+  const option = (value, label, current) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`;
+  const attrField = (key, label) => `<label>${label}<select name="attr_${key}">${option("", "—", (record.attribution || {})[label])}${option("Y", "Y", (record.attribution || {})[label])}${option("N", "N", (record.attribution || {})[label])}</select></label>`;
+  const attribution = record.attribution || {};
+  $("#decisionEditor").innerHTML = `<form id="decisionForm"><header><div><small>${formatDate(record.reportDate)} · ${escapeHtml(record.runId)}</small><h3>${escapeHtml(record.variety)} ${escapeHtml(record.symbol)}</h3></div><div class="decision-market-facts"><strong class="${signClass(record.amountSignal)}">${formatAmount(record.amountSignal)}</strong><strong class="${record.changePct == null ? "" : signClass(record.changePct)}">${record.changePct == null ? "涨跌 暂无" : `${formatSigned(record.changePct, 2)}%`}</strong></div></header>
+    <div class="decision-facts"><span>手数 ${formatHands(record.handsSignal)}</span><span>收盘 ${formatPrice(record.close)}</span><span>趋势 ${escapeHtml(record.trend || "暂无")}</span></div>
+    <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
+    <div class="decision-form-grid">
+      <label>交易状态<select name="tradeStatus">${option("no_trade","未交易",record.tradeStatus)}${option("open","持仓中",record.tradeStatus)}${option("closed","已平仓",record.tradeStatus)}</select></label>
+      <label>方向<select name="direction">${option("", "未定", record.direction)}${option("多", "做多", record.direction)}${option("空", "做空", record.direction)}</select></label>
+      <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="为什么值得做，最关键的支撑和反向证据是什么">${escapeHtml(record.mainContradiction)}</textarea></label>
+      <label>入场触发<input name="trigger" value="${escapeHtml(record.trigger)}" placeholder="价格或技术条件"></label>
+      <label>仓位（占总仓位比例）<input name="positionPct" value="${escapeHtml(record.positionPct)}" placeholder="如 30%"></label>
+      <label>失效 / 止损<input name="invalidation" value="${escapeHtml(record.invalidation)}" placeholder="错在哪里退出"></label>
+      <label>平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(record.closeNote)}</textarea></label>
+      <label>盈亏（元，选填）<input name="pnl" type="number" step="any" value="${escapeHtml(String(record.pnl ?? ""))}" placeholder="亏损填负数"></label>
+      <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因（复盘）</span>${attrField("judgment","判断错？")}${attrField("timing","时机错？")}${attrField("position","仓位错？")}${attrField("tool","工具错？")}${attrField("execution","执行错？")}</div>
+      <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误：&#10;下一次只改：">${escapeHtml(record.reviewNote)}</textarea></label>
+      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(record.selfInquiry || "")}</textarea></label>
+    </div><p id="decisionFormMessage" class="form-message" aria-live="polite"></p><div class="decision-form-actions"><button class="decision-save" type="submit">保存复盘</button><button class="decision-delete" type="button" data-delete-decision="${escapeHtml(record.id)}">删除</button></div></form>`;
 }
 
-/* ===================== 复盘卡编辑器（新草稿 / 继续草稿 / 修订已归档） =====================
-   三种模式共用一套表单字段：
-   - 草稿（含未落库的新卡）：保存 / 发布归档 / 删除
-   - 已归档：保存修订 / 撤回发布（转回草稿）/ 删除
-   经 HistoryStore.putObservation 写回(IndexedDB + 私有仓云同步,updated 新者胜)。 */
+/* ===================== 历史复盘修订(编辑已有 observation) =====================
+   直接修订 observation 本体(非 decision 体系):保留原记录全部字段,只覆盖复盘相关字段,
+   经 HistoryStore.putObservation 写回(IndexedDB + 私有仓云同步,updated 新者胜)。
+   适用场景:Excel/月度复盘当时没填完整,事后补盈亏、归因、认知偏差等。 */
 function findObservation(id) {
   return (state.history?.observations || []).find((item) => item.id === id) || null;
 }
 
-function currentEditingCard() {
-  if (state.pendingDraft) return state.pendingDraft;
-  return findObservation(state.editingObservationId);
-}
-
 function startObservationEdit(id) {
   if (!findObservation(id)) return;
-  state.pendingDraft = null;
-  state.pendingMatchDate = null;
   state.editingObservationId = id;
   switchView("decisions");
   requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: "smooth", block: "start"}));
 }
 
 function renderObservationEditor() {
-  const item = currentEditingCard();
-  if (!item) { state.editingObservationId = null; state.pendingDraft = null; renderDecisionView(); return; }
-  const mode = obsStatus(item) === "published" ? "published" : "draft";
-  const isNew = !!state.pendingDraft;
+  const item = findObservation(state.editingObservationId);
+  if (!item) { state.editingObservationId = null; renderDecisionView(); return; }
   const option = (value, label, current) => `<option value="${value}" ${current === value ? "selected" : ""}>${label}</option>`;
   const tradeStatus = item.tradeStatus || (item.executed ? "closed" : "no_trade");
   const attr = item.attribution || {};
   const attrField = (key, label) => `<label>${label}<select name="attr_${key}">${option("", "—", attr[label])}${option("Y", "Y", attr[label])}${option("N", "N", attr[label])}</select></label>`;
-  /* 交易状态提升为一级选择：先选状态，下方字段随之增减。
-     草稿选「已平仓」保存 = 发布归档；已归档修订同样可见全字段。 */
-  const statusOptions = `${option("no_trade", "未交易", tradeStatus)}${option("open", "持仓中", tradeStatus)}${option("closed", "已平仓", tradeStatus)}`;
-  const modeBadge = mode === "published"
-    ? `<em class="decision-mode-badge published">已归档</em>`
-    : `<em class="decision-mode-badge draft">${decisionStatusLabel(tradeStatus)} · 进行中</em>`;
-  const dueText = mode === "draft"
-    ? `先选交易状态，表单随之增减；选「已平仓」保存 = 发布归档，固定到下方记录（可撤回）。`
-    : `修订只覆盖当前显示的字段，原记录其余信息全部保留；保存后写入本地并同步私有数据仓。`;
-  const ranking = observationEvidence(item);
-
-  /* 品种匹配：记录没落在任何已知品种上（如月度复盘导入的「未知」），在编辑里归入真实品种。
-     还没有复盘记录的品种排在前面，已有记录的标注出来。 */
-  const instruments = [...(currentSnapshot().instruments || [])];
-  const knownSymbols = new Set(journalObservations().map((entry) => entry.symbol).filter(Boolean));
-  instruments.sort((a, b) => (Number(knownSymbols.has(a.symbol)) - Number(knownSymbols.has(b.symbol))) || a.variety.localeCompare(b.variety, "zh-CN"));
-  const symbolMatched = item.symbol && instruments.some((entry) => entry.symbol === item.symbol);
-  const matchBlock = !symbolMatched && instruments.length
-    ? `<div class="decision-match wide"><span class="decision-attr-title">品种匹配</span><select name="matchSymbol">${instruments.map((entry) => `<option value="${escapeHtml(entry.symbol)}" ${entry.symbol === item.symbol ? "selected" : ""}>${escapeHtml(entry.variety)} ${escapeHtml(entry.symbol)}${knownSymbols.has(entry.symbol) ? "（已有记录）" : "（未加）"}</option>`).join("")}</select><button class="history-edit-btn" type="button" data-match-observation="${escapeHtml(item.id)}">归入该品种</button></div>`
-    : "";
-  /* 日期匹配：导入记录缺日期（显示「日期缺失」）时，弹层日历选择后补上。
-     选中的日期暂存 pendingMatchDate，点「设为该日期」才写入。 */
-  const dateBlock = !item.date
-    ? `<div class="decision-match wide"><span class="decision-attr-title">日期匹配</span><button type="button" class="decision-match-date" data-cal-anchor="1">${escapeHtml(state.pendingMatchDate || "点击选择日期")}</button><button class="history-edit-btn" type="button" data-match-date="${escapeHtml(item.id)}">设为该日期</button></div>`
-    : "";
-
-  /* 字段按状态增减：未交易 = 方向/核心逻辑/未交易原因；
-     持仓中 = 加 入场触发/仓位/失效止损/盈亏；已平仓 = 全量（原文输入已下线） */
-  const planFields = `
-      <label>入场触发<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="价格或技术条件"></label>
-      <label>仓位(占总仓位比例)<input name="positionPct" value="${escapeHtml(item.positionPct || "")}" placeholder="如 30%"></label>
-      <label>失效 / 止损<input name="stopLossTakeProfit" value="${escapeHtml(item.stopLossTakeProfit || "")}" placeholder="错在哪里退出"></label>`;
-  const pnlField = `<label>盈亏(元,选填)<input name="myPnl" type="number" step="any" value="${item.myPnl == null ? "" : escapeHtml(String(item.myPnl))}" placeholder="亏损填负数"></label>`;
-  const closeFields = `
-      <label class="wide">平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(item.closeNote || "")}</textarea></label>${pnlField}
-      <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因(复盘)</span>${attrField("judgment","判断错?")}${attrField("timing","时机错?")}${attrField("position","仓位错?")}${attrField("tool","工具错?")}${attrField("execution","执行错?")}</div>
-      <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误:&#10;下一次只改:">${escapeHtml(item.reviewNote || "")}</textarea></label>
-      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(item.selfInquiry || "")}</textarea></label>`;
-  const statusFields = tradeStatus === "no_trade"
-    ? `<label class="wide">未交易原因<input name="noTradeReason" value="${escapeHtml(item.noTradeReason || "")}"></label>`
-    : tradeStatus === "open"
-      ? `${planFields}${pnlField}`
-      : `${planFields}${closeFields}`;
-  const actions = mode === "draft"
-    ? `<button class="decision-save${tradeStatus === "closed" ? " decision-publish" : ""}" type="submit">${tradeStatus === "closed" ? "发布归档" : "保存"}</button>
-       <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
-       ${isNew ? `<button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button>` : ""}`
-    : `<button class="decision-save" type="submit">保存修订</button>
-       <button class="decision-delete" type="button" data-unpublish-observation="${escapeHtml(item.id)}">撤回发布</button>
-       <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
-       <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button>`;
   $("#decisionEditor").innerHTML = `<form id="observationForm" data-obs-id="${escapeHtml(item.id)}">
-    <header><div><small>${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
+    <header><div><small>修订复盘 · ${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
     <h3>${escapeHtml(item.variety || "")} ${escapeHtml(item.symbol || "")}</h3></div>
-    <div class="decision-market-facts">${modeBadge}</div></header>
-    <p class="decision-due">${dueText}</p>
-    <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
+    <div class="decision-market-facts"><em class="decision-signal-status">${item.executed ? "已执行" : "未执行"}</em></div></header>
+    <p class="decision-due">修订只覆盖下面填写的字段,原记录其余信息全部保留;保存后写入本地并同步私有数据仓。</p>
     <div class="decision-form-grid">
-      <label class="wide status-primary">交易状态<select name="tradeStatus">${statusOptions}</select></label>
-      ${matchBlock}${dateBlock}
+      <label>交易状态<select name="tradeStatus">${option("no_trade","未交易",tradeStatus)}${option("open","持仓中",tradeStatus)}${option("closed","已平仓",tradeStatus)}</select></label>
       <label>方向<select name="direction">${option("", "未定", item.direction || "")}${option("多", "做多", item.direction || "")}${option("空", "做空", item.direction || "")}</select></label>
       <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="为什么值得做,最关键的支撑和反向证据是什么">${escapeHtml(item.mainContradiction || "")}</textarea></label>
-      ${statusFields}
+      <label>入场触发<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="价格或技术条件"></label>
+      <label>仓位(占总仓位比例)<input name="positionPct" value="${escapeHtml(item.positionPct || "")}" placeholder="如 30%"></label>
+      <label>失效 / 止损<input name="stopLossTakeProfit" value="${escapeHtml(item.stopLossTakeProfit || "")}" placeholder="错在哪里退出"></label>
+      <label>平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(item.closeNote || "")}</textarea></label>
+      <label>盈亏(元,选填)<input name="myPnl" type="number" step="any" value="${item.myPnl == null ? "" : escapeHtml(String(item.myPnl))}" placeholder="亏损填负数"></label>
+      <label class="wide">未交易原因<input name="noTradeReason" value="${escapeHtml(item.noTradeReason || "")}"></label>
+      <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因(复盘)</span>${attrField("judgment","判断错?")}${attrField("timing","时机错?")}${attrField("position","仓位错?")}${attrField("tool","工具错?")}${attrField("execution","执行错?")}</div>
+      <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误:&#10;下一次只改:">${escapeHtml(item.reviewNote || "")}</textarea></label>
+      <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(item.selfInquiry || "")}</textarea></label>
+      <label class="wide">复盘与认知偏差原文<textarea name="review" rows="4">${escapeHtml(item.review || "")}</textarea></label>
     </div>
     <p id="observationFormMessage" class="form-message" aria-live="polite"></p>
-    <div class="decision-form-actions">${actions}</div>
+    <div class="decision-form-actions"><button class="decision-save" type="submit">保存修订</button>
+    <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button></div>
   </form>`;
 }
 
@@ -1067,7 +981,6 @@ function renderHistoryEntry(item) {
       ${item.strategySource ? `<span class="history-strategy-source">参考来源：${escapeHtml(item.strategySource)}</span>` : ""}
       <em class="history-exec-flag">${item.executed ? "已执行" : "未执行"}</em>
       <button class="history-edit-btn" type="button" data-edit-observation="${escapeHtml(item.id)}" title="修订这条复盘(补填盈亏/归因/认知偏差)">编辑</button>
-      <button class="history-edit-btn history-delete-btn" type="button" data-delete-observation="${escapeHtml(item.id)}" title="删除这条复盘(本地+云端,不可恢复)">删除</button>
     </header>
     ${historyPlanRows(item)}
     ${pnl.text ? `<div class="history-pnl ${pnl.cls}">${escapeHtml(pnl.text)}</div>` : ""}
@@ -1083,11 +996,9 @@ function renderHistoryEntry(item) {
 function renderHistoryView() {
   const history = state.history;
   if (!history) return;
-  /* 归档视图：只显示已发布（published）记录——进行中的草稿卡留在上方工作区，不混入历史 */
-  const observations = (history.observations || []).filter((item) => !item.deleted && obsStatus(item) === "published");
+  const observations = history.observations || [];
   const trades = history.trades || [];
   const months = history.months || [];
-  const drafts = (history.observations || []).filter((item) => !item.deleted && obsStatus(item) === "draft");
 
   const executedObs = observations.filter((item) => item.executed);
   const myPnlTotal = executedObs.reduce((sum, item) => sum + (item.myPnl || 0), 0) + trades.reduce((sum, item) => sum + (item.myPnl || 0), 0);
@@ -1099,7 +1010,6 @@ function renderHistoryView() {
     summaryCard("观察（未执行）", observations.length - executedObs.length, "参考他人策略或自身观察记录"),
     summaryCard("已执行盈亏合计", `${formatSigned(myPnlTotal, 0)} 元`, "仅统计本人实际执行记录", myPnlTotal > 0 ? "bull-text" : myPnlTotal < 0 ? "bear-text" : ""),
     summaryCard("月度复盘合计", `${formatSigned(monthPnlTotal, 0)} 元`, `${months.length} 个月（${escapeHtml(months.map((month) => month.label).join("/"))}）`, monthPnlTotal > 0 ? "bull-text" : monthPnlTotal < 0 ? "bear-text" : ""),
-    summaryCard("进行中的复盘", drafts.length, "保存未发布的持仓/观察卡（不在归档）", ""),
   ].join("") + (history.errors && history.errors.length ? `<div class="detail-source-notice">部分数据源导入失败：${escapeHtml(history.errors.join("；"))}</div>` : "");
 
   const groups = {};
@@ -1111,36 +1021,16 @@ function renderHistoryView() {
   const sorted = Object.values(groups).sort((a, b) => b.items.length - a.items.length || a.variety.localeCompare(b.variety, "zh-CN"));
   if (!state.historyJournalSymbol || !groups[state.historyJournalSymbol]) state.historyJournalSymbol = sorted[0]?.key || null;
 
-  /* 品种选择器：搜索框 + 下拉筛选，替代整列品种清单（品种多了之后全量平铺太长） */
-  state.journalGroupsCache = sorted;
-  if (!sorted.length) {
-    $("#historySymbolList").innerHTML = `<div class="detail-empty">没有导入的历史记录。</div>`;
-  } else {
-    $("#historySymbolList").innerHTML = `<div class="history-symbol-picker">
-      <input id="journalSymbolSearch" type="search" placeholder="搜索品种或代码" value="${escapeHtml(state.historyJournalQuery || "")}" aria-label="搜索品种">
-      <select id="journalSymbolSelect" aria-label="选择品种"></select>
-      <p class="history-symbol-hint">共 ${sorted.length} 个品种 · 搜索后在下拉中选择</p>
-    </div>`;
-    renderJournalSymbolOptions();
-  }
+  $("#historySymbolList").innerHTML = sorted.map((group) => {
+    const executedCount = group.items.filter((item) => item.executed).length;
+    return `<button class="history-symbol-item ${group.key === state.historyJournalSymbol ? "is-active" : ""}" data-history-symbol="${escapeHtml(group.key)}"><span><strong>${escapeHtml(group.variety)}</strong><small>${escapeHtml(group.symbol || "无代码")} · ${group.items.length} 条记录</small></span><em>${executedCount}/${group.items.length}</em></button>`;
+  }).join("") || `<div class="detail-empty">没有导入的历史记录。</div>`;
 
   const group = groups[state.historyJournalSymbol];
   if (!group) { $("#historyTimeline").innerHTML = `<div class="detail-empty">暂无历史数据。先运行 scripts/import_trading_log_excel.py 与 scripts/import_monthly_review_md.py 生成 data/imported/ 下的 JSON。</div>`; return; }
   const items = [...group.items].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
   const executedPnl = items.filter((item) => item.executed).reduce((sum, item) => sum + (item.myPnl || 0), 0);
   $("#historyTimeline").innerHTML = `<div class="history-timeline-head"><h3>${escapeHtml(group.variety)} ${escapeHtml(group.symbol)}</h3><span>${items.length} 条记录 · ${items.filter((item) => item.executed).length} 次执行 · 已执行盈亏 <b class="${signClass(executedPnl)}">${formatSigned(executedPnl, 0)} 元</b></span></div>${items.map(renderHistoryEntry).join("")}`;
-}
-
-/* 品种选择器下拉选项：按搜索词过滤（只重建 options，不重建搜索框，输入焦点不丢） */
-function renderJournalSymbolOptions() {
-  const select = $("#journalSymbolSelect");
-  if (!select) return;
-  const query = (state.historyJournalQuery || "").trim().toLowerCase();
-  const visible = (state.journalGroupsCache || []).filter((group) => !query || `${group.variety}${group.symbol || ""}`.toLowerCase().includes(query));
-  select.innerHTML = visible.map((group) => {
-    const executedCount = group.items.filter((item) => item.executed).length;
-    return `<option value="${escapeHtml(group.key)}" ${group.key === state.historyJournalSymbol ? "selected" : ""}>${escapeHtml(group.variety)} ${escapeHtml(group.symbol || "无代码")} · ${group.items.length} 条 (${executedCount}/${group.items.length})</option>`;
-  }).join("") || `<option value="">没有匹配品种</option>`;
 }
 
 function renderMetal4d(row) {
@@ -1161,7 +1051,7 @@ function renderCta() {
   const bull = rows.filter((row) => row.score >= 15).length;
   const bear = rows.filter((row) => row.score <= -15).length;
   $("#ctaSummary").innerHTML = [
-    summaryCard("CTA 样本", rows.length, `全量 ${allRows.length} 个，含股指 ${allRows.filter((row) => row.sector === "股指").length} 个`),
+    summaryCard("CTA 样本", rows.length, `全量 ${allRows.length} 个`),
     summaryCard("偏多", bull, "分数不低于 +15", "bull-text"),
     summaryCard("中性", rows.length - bull - bear, "-15 至 +15"),
     summaryCard("偏空", bear, "分数不高于 -15", "bear-text"),
@@ -1186,7 +1076,6 @@ function renderAll() {
   renderNetFlowChanges();
   renderSeatFlow();
   renderBrokerHighlights();
-  renderStockIndices();
   renderOverviewStatus();
   renderDetailWorkspace();
   renderInstrumentTable();
@@ -1264,83 +1153,59 @@ function bindEvents() {
       renderInstrumentTable();
     }
     const openDecision = event.target.closest("[data-open-decision]");
-    if (openDecision) openOrCreateCard(openDecision.dataset.openDecision);
+    if (openDecision) upsertDecision(openDecision.dataset.openDecision);
     const decisionPage = event.target.closest("[data-decision-page]");
     if (decisionPage) { state.decisionPage = numeric(decisionPage.dataset.decisionPage); renderDecisionView(); }
+    const editDecision = event.target.closest("[data-edit-decision]");
+    if (editDecision) { state.activeDecisionId = editDecision.dataset.editDecision; renderDecisionView(); }
     const createDecision = event.target.closest("[data-create-decision]");
-    if (createDecision) { openOrCreateCard(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: "smooth"}); }
+    if (createDecision) { upsertDecision(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: "smooth"}); }
+    const deleteDecision = event.target.closest("[data-delete-decision]");
+    if (deleteDecision) { state.decisions = state.decisions.filter((entry) => entry.id !== deleteDecision.dataset.deleteDecision); state.activeDecisionId = null; saveDecisions(); renderDecisionView(); }
     const historySymbol = event.target.closest("[data-history-symbol]");
     if (historySymbol) { state.historyJournalSymbol = historySymbol.dataset.historySymbol; renderHistoryView(); }
     const editObs = event.target.closest("[data-edit-observation]");
     if (editObs) startObservationEdit(editObs.dataset.editObservation);
-    if (event.target.closest("[data-cancel-observation-edit]")) { state.editingObservationId = null; state.pendingDraft = null; renderDecisionView(); }
-    const deleteObs = event.target.closest("[data-delete-observation]");
-    if (deleteObs) deleteObservationCard(deleteObs.dataset.deleteObservation);
-    const matchObs = event.target.closest("[data-match-observation]");
-    if (matchObs) matchObservationToSymbol(matchObs.dataset.matchObservation);
-    const matchDate = event.target.closest("[data-match-date]");
-    if (matchDate) matchObservationDate(matchDate.dataset.matchDate);
-    const calAnchor = event.target.closest("[data-cal-anchor]");
-    if (calAnchor) openCalendar({
-      anchor: calAnchor,
-      value: state.pendingMatchDate || "",
-      onPick: (dk) => { state.pendingMatchDate = dk; calAnchor.textContent = dk; calAnchor.classList.add("has-value"); },
-    });
-    const unpublishObs = event.target.closest("[data-unpublish-observation]");
-    if (unpublishObs) unpublishObservationCard(unpublishObs.dataset.unpublishObservation);
+    if (event.target.closest("[data-cancel-observation-edit]")) { state.editingObservationId = null; renderDecisionView(); }
   });
-  /* 交易状态是一级选择：切换时把当前已填内容先并回卡片再重渲染，输入不丢 */
-  $("#decisionEditor").addEventListener("change", (event) => {
-    if (event.target.name !== "tradeStatus") return;
-    const item = currentEditingCard();
-    const form = $("#observationForm");
-    if (!item || !form) return;
-    Object.assign(item, collectFormIntoObservation(item, form).out);
-    renderObservationEditor();
-  });
-  /* 品种历史操作回看：搜索框只重建下拉 options（焦点不丢），下拉选中切换右侧时间线 */
-  $("#historySymbolList").addEventListener("input", (event) => {
-    if (event.target.id !== "journalSymbolSearch") return;
-    state.historyJournalQuery = event.target.value;
-    renderJournalSymbolOptions();
-  });
-  $("#historySymbolList").addEventListener("change", (event) => {
-    if (event.target.id !== "journalSymbolSelect" || !event.target.value) return;
-    state.historyJournalSymbol = event.target.value;
-    renderHistoryView();
-  });
-  /* 观察卡表单提交 = 保存；草稿选「已平仓」保存 = 发布归档（校验平仓记录 + 最大错误后确认） */
   $("#decisionEditor").addEventListener("submit", (event) => {
     if (event.target.id !== "observationForm") return;
     event.preventDefault();
-    const item = currentEditingCard();
+    const item = findObservation(state.editingObservationId);
     if (!item) return;
     const form = event.target;
+    const values = Object.fromEntries(new FormData(form));
     const message = $("#observationFormMessage");
-    const {out: updated, values} = collectFormIntoObservation(item, form);
-    const mode = obsStatus(item) === "published" ? "published" : "draft";
-    const publishing = mode === "draft" && values.tradeStatus === "closed";
-    if (values.tradeStatus === "closed" && !(values.closeNote || "").trim()) {
-      message.textContent = publishing ? "发布前必须填写平仓记录（平仓过程与是否按计划执行）。" : "已平仓必须填写平仓记录。";
+    const attribution = {};
+    [["judgment", "判断错?"], ["timing", "时机错?"], ["position", "仓位错?"], ["tool", "工具错?"], ["execution", "执行错?"]].forEach(([key, label]) => {
+      if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
+    });
+    const updated = {...item};
+    updated.tradeStatus = values.tradeStatus;
+    updated.executed = values.tradeStatus !== "no_trade";
+    updated.direction = values.direction;
+    updated.mainContradiction = values.mainContradiction.trim();
+    updated.trigger = values.trigger.trim();
+    updated.positionPct = values.positionPct.trim();
+    updated.stopLossTakeProfit = values.stopLossTakeProfit.trim();
+    updated.closeNote = values.closeNote.trim();
+    updated.myPnl = values.myPnl === "" ? null : numeric(values.myPnl);
+    updated.noTradeReason = values.noTradeReason.trim();
+    updated.reviewNote = values.reviewNote.trim();
+    updated.selfInquiry = values.selfInquiry.trim();
+    updated.review = values.review.trim();
+    updated.attribution = Object.keys(attribution).length ? attribution : null;
+    updated.editedAt = new Date().toISOString();
+    if (values.tradeStatus === "closed" && !values.closeNote.trim()) {
+      message.textContent = "已平仓必须填写平仓记录。";
       return;
     }
-    if (values.tradeStatus === "closed" && !(values.reviewNote || "").trim()) {
-      message.textContent = publishing ? "发布前必须写最大错误与下一条规则。" : "已平仓必须写最大错误与下一条规则。";
+    if (updated.executed && !updated.review.trim() && updated.myPnl == null) {
+      message.textContent = "已执行记录至少补填盈亏或复盘内容之一。";
       return;
-    }
-    if (mode === "published" && updated.executed && !(updated.review || "").trim() && updated.myPnl == null) {
-      /* 仅归档卡修订时要求补全：草稿阶段持仓中，盈亏可后补（复盘原文输入已下线） */
-      message.textContent = "已执行记录归档修订时至少补填盈亏。";
-      return;
-    }
-    if (publishing) {
-      if (!window.confirm(`确认发布「${item.variety || item.symbol}」？\n发布 = 该品种已平仓，此卡将固定到下方归档记录（之后仍可撤回或修订）。`)) return;
-      updated.status = "published";
-      updated.publishedAt = new Date().toISOString();
     }
     HistoryStore.putObservation(updated);
     state.editingObservationId = null;
-    state.pendingDraft = null;
     renderDecisionView();
     renderHistoryView();
     renderCloudSyncStatus();
@@ -1363,116 +1228,27 @@ function bindEvents() {
   $("#ctaSearchInput").addEventListener("input", (event) => { state.ctaQuery = event.target.value; renderCta(); });
   $("#ctaSectorFilter").addEventListener("change", (event) => { state.ctaSector = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaDirectionFilter").addEventListener("change", (event) => { state.ctaDirection = event.target.value; state.activeCtaSymbol = null; renderCta(); });
-}
-
-/* 品种匹配：把「未知」等未落品种的记录归入真实品种（写回即重分组，记录离开未知组）。
-   目标品种已有复盘记录时先确认；匹配后编辑器保持打开，可继续补字段。 */
-function matchObservationToSymbol(id) {
-  const item = findObservation(id);
-  const form = $("#observationForm");
-  if (!item || !form) return;
-  const symbol = form.querySelector('select[name="matchSymbol"]')?.value;
-  const target = symbol && (currentSnapshot().instruments || []).find((entry) => entry.symbol === symbol);
-  if (!target) return;
-  if (item.symbol === target.symbol) return;
-  const hasExisting = journalObservations().some((entry) => entry.symbol === target.symbol && entry.id !== item.id);
-  if (hasExisting && !window.confirm(`「${target.variety} ${target.symbol}」已有复盘记录，确认把这条记录也归入该品种？`)) return;
-  HistoryStore.putObservation({...item, symbol: target.symbol, variety: target.variety, editedAt: new Date().toISOString()});
-  renderDecisionView();
-  renderHistoryView();
-  renderCloudSyncStatus();
-}
-
-/* 日期匹配：给缺日期的记录补上真实日期（时间线按日期排序，补齐后归位）。
-   日期来自弹层日历（pendingMatchDate），不再用手动输入——原生 date 输入
-   年月日未拼完整时 value 恒为空串，点确认会静默无效。 */
-function matchObservationDate(id) {
-  const item = findObservation(id);
-  if (!item) return;
-  const date = state.pendingMatchDate;
-  if (!date) {
-    const message = $("#observationFormMessage");
-    if (message) message.textContent = "请先在日历弹层里选好日期，再点「设为该日期」。";
-    return;
-  }
-  if (item.date === date) { state.pendingMatchDate = null; return; }
-  HistoryStore.putObservation({...item, date, editedAt: new Date().toISOString()});
-  state.pendingMatchDate = null;
-  renderDecisionView();
-  renderHistoryView();
-  renderCloudSyncStatus();
-}
-
-/* ===================== 通用日历弹层 =====================
-   与总览页顶栏日历同款视觉（.cal / .cal-nav / .cal-day），区别：
-   任意日期可选、回调自定义、fixed 定位跟随锚点。全局只存在一个实例。 */
-let calendarPanel = null;
-function closeCalendar() {
-  if (!calendarPanel) return;
-  calendarPanel.remove();
-  document.removeEventListener("click", calendarOutside, true);
-  calendarPanel = null;
-}
-function calendarOutside(event) {
-  if (calendarPanel && !calendarPanel.contains(event.target)) closeCalendar();
-}
-function openCalendar({anchor, value, onPick}) {
-  closeCalendar();
-  const panel = document.createElement("div");
-  panel.className = "cal cal-pop";
-  const pad = (n) => String(n).padStart(2, "0");
-  const today = new Date();
-  let vy = value ? +value.slice(0, 4) : today.getFullYear();
-  let vm = value ? +value.slice(5, 7) - 1 : today.getMonth();
-  const head = document.createElement("div"); head.className = "cal-head";
-  const prev = document.createElement("button"); prev.type = "button"; prev.className = "cal-nav"; prev.textContent = "‹"; prev.setAttribute("aria-label", "上一月");
-  const title = document.createElement("strong");
-  const next = document.createElement("button"); next.type = "button"; next.className = "cal-nav"; next.textContent = "›"; next.setAttribute("aria-label", "下一月");
-  head.append(prev, title, next);
-  const week = document.createElement("div"); week.className = "cal-grid cal-week";
-  week.innerHTML = "<span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>";
-  const days = document.createElement("div"); days.className = "cal-grid cal-days";
-  const render = () => {
-    title.textContent = vy + "年" + (vm + 1) + "月";
-    days.innerHTML = "";
-    const first = new Date(vy, vm, 1).getDay();
-    const total = new Date(vy, vm + 1, 0).getDate();
-    for (let i = 0; i < first; i++) days.appendChild(document.createElement("span"));
-    for (let d = 1; d <= total; d++) {
-      const dk = vy + "-" + pad(vm + 1) + "-" + pad(d);
-      const day = document.createElement("button");
-      day.type = "button"; day.className = "cal-day"; day.textContent = d;
-      const dow = new Date(vy, vm, d).getDay();
-      if (dow === 0 || dow === 6) day.classList.add("weekend");
-      if (dk === value) day.classList.add("is-selected");
-      day.addEventListener("click", () => { closeCalendar(); onPick(dk); });
-      days.appendChild(day);
-    }
-  };
-  prev.addEventListener("click", () => { vm--; if (vm < 0) { vm = 11; vy--; } render(); });
-  next.addEventListener("click", () => { vm++; if (vm > 11) { vm = 0; vy++; } render(); });
-  panel.append(head, week, days);
-  document.body.appendChild(panel);
-  render();
-  const rect = anchor.getBoundingClientRect();
-  const width = 264, height = 322;
-  panel.style.left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)) + "px";
-  /* fixed 定位：锚点下方放不下就翻到上方 */
-  panel.style.top = (rect.bottom + height + 6 < window.innerHeight ? rect.bottom + 6 : Math.max(8, rect.top - height - 6)) + "px";
-  calendarPanel = panel;
-  setTimeout(() => document.addEventListener("click", calendarOutside, true), 0);
-}
-
-/* 撤回发布：误发布的安全阀——转回进行中的草稿卡，回到上方工作区继续编辑 */
-function unpublishObservationCard(id) {
-  const item = findObservation(id);
-  if (!item) return;
-  if (!window.confirm(`撤回发布「${item.variety || item.symbol}」？\n此卡将转回「进行中的复盘」，重新回到可编辑状态。`)) return;
-  const updated = {...item, status: "draft", tradeStatus: "open", publishedAt: null, editedAt: new Date().toISOString()};
-  HistoryStore.putObservation(updated);
-  renderDecisionView();
-  renderHistoryView();
-  renderCloudSyncStatus();
+  $("#decisionEditor").addEventListener("submit", (event) => {
+    if (event.target.id !== "decisionForm") return;
+    event.preventDefault();
+    const record = state.decisions.find((entry) => entry.id === state.activeDecisionId);
+    if (!record) return;
+    const values = Object.fromEntries(new FormData(event.target));
+    const message = $("#decisionFormMessage");
+    const attribution = {};
+    [["judgment", "判断错？"], ["timing", "时机错？"], ["position", "仓位错？"], ["tool", "工具错？"], ["execution", "执行错？"]].forEach(([key, label]) => {
+      if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
+    });
+    if (values.tradeStatus === "closed" && !values.closeNote.trim()) { message.textContent = "已平仓必须填写平仓记录。"; return; }
+    if (values.tradeStatus === "closed" && !values.reviewNote.trim()) { message.textContent = "已平仓必须写最大错误与下一条规则。"; return; }
+    Object.assign(record, values, {attribution, updatedAt: new Date().toISOString()});
+    delete record.attr_judgment; delete record.attr_timing; delete record.attr_position; delete record.attr_tool; delete record.attr_execution;
+    saveDecisions();
+    syncDecisionToHistory(record);
+    renderDecisionView();
+    renderHistoryView();
+    if (message) message.textContent = "";
+  });
 }
 
 /* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
@@ -1534,6 +1310,7 @@ Promise.all([
   .then(([data, manifest, history]) => {
     state.data = data;
     state.manifest = manifest;
+    state.decisions = loadDecisions();
     state.date = data.latestDate;
     state.history = history || {observations: [], trades: [], narratives: [], months: [], errors: []};
     state.activeSymbol = data.snapshots[data.latestDate].tripleResonance[0]?.symbol || data.snapshots[data.latestDate].instruments[0]?.symbol;
