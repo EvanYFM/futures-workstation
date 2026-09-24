@@ -143,7 +143,7 @@ function renderFocus() {
       <div class="focus-amount ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</div>
       <div class="focus-sub">三方手数 ${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</div>
       <div class="signal-track"><span class="signal-fill ${tone}" style="width:${width}%"></span></div>
-      <div class="focus-tags"><span class="tag ${tone}">${escapeHtml(item.resonance.label || item.direction)}</span>${quote ? `<span class="tag ${dirClass(quote.changePct)}">${formatSigned(quote.changePct, 2)}%</span>` : ""}${item.trend ? `<span class="tag">趋势 ${escapeHtml(item.trend.temperature || "-")}${item.trend.fresh ? "" : "（旧）"}</span>` : ""}</div>
+      <div class="focus-tags"><span class="tag ${tone}">${escapeHtml(item.resonance.label || item.direction)}</span>${quote ? `<span class="tag ${dirClass(quote.changePct)}">${formatSigned(quote.changePct, 2)}%</span>` : ""}</div>
     </button>`;
   }).join("");
 }
@@ -253,7 +253,7 @@ function renderCorePanorama() {
       <span>${rCell(r30)}</span>
       <span class="panorama-signal"><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong><small class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</small></span>
       <span>${groupBars(item)}</span>
-      <span class="panorama-tags">${trendChip(item.trend)}<span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
+      <span class="panorama-tags"><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
     </button>`;
   }).join("")}</div></section>`).join("")}`;
 }
@@ -278,16 +278,6 @@ function renderBrokerHighlights() {
   }).join("");
 }
 
-function renderWeather() {
-  const rows = currentSnapshot().weather.slice(0, 7);
-  $("#weatherList").innerHTML = rows.length ? rows.map((item) => `<div class="weather-row">
-    <div><strong>${escapeHtml(item.variety)}</strong><br><small>${escapeHtml(item.window)} · ${escapeHtml(item.date)}</small></div>
-    <div><span class="risk-level ${escapeHtml(item.level)}">${item.level === "high" ? "高风险" : item.level === "medium" ? "中风险" : "低风险"}</span><br><small>${escapeHtml(item.origins)}</small></div>
-    <div class="weather-reason">${escapeHtml(item.types)} · ${escapeHtml(item.reason)}</div>
-    <div class="weather-reflection">盘面：${escapeHtml(item.reflection || "待验证")}</div>
-  </div>`).join("") : `<div class="detail-empty">该快照没有可用农业天气风险数据。</div>`;
-}
-
 function renderOverviewStatus() {
   const snapshot = currentSnapshot();
   const summary = snapshot.summary;
@@ -295,7 +285,6 @@ function renderOverviewStatus() {
   $("#overviewStatus").innerHTML = [
     ["席位披露", latestDisclosure, `${summary.instrumentCount} 个商品品种`],
     ["收盘行情", sourceFileDate(summary.quoteSourceFile), `${summary.quoteFreshCount}/${summary.instrumentCount} 与报告日同日 · ${summary.quoteSource || "来源未披露"}`],
-    ["趋势快照", sourceFileDate(summary.trendSourceFile), `${summary.trendFreshCount}/${summary.instrumentCount} 与报告日同日 · 趋势动物`],
     ["保证金", `${(summary.marginCoverage * 100).toFixed(0)}% 覆盖`, summary.marginSourceUpdate || "更新时间未披露"],
     ["期现基差", `${summary.basisCoveredCount || 0} 个`, sourceFileDate(summary.basisSourceFile)],
     ["仓单数据", `${summary.warehouseCoveredCount || 0} 个`, sourceFileDate(summary.warehouseSourceFile)],
@@ -345,14 +334,6 @@ function groupBars(item) {
   return `<div class="group-bars">${values.map((value, index) => `<div class="group-line"><label>${labels[index]}</label><span class="micro-track"><span class="micro-fill ${dirClass(value)}" style="width:${Math.max(3, Math.abs(value) / max * 100)}%"></span></span><output class="${signClass(value)}">${formatAmount(value)}</output></div>`).join("")}</div>`;
 }
 
-function trendChip(trend) {
-  if (!trend) return `<span class="trend-chip">无数据</span>`;
-  const bullish = ["温", "热", "沸"].includes(trend.temperature);
-  const bearish = ["凉", "寒", "冻"].includes(trend.temperature);
-  const tone = bullish ? "bullish" : bearish ? "bearish" : "";
-  return `<span class="trend-chip ${tone} ${trend.fresh ? "" : "is-stale"}">${escapeHtml(trend.temperature || "-")} · ${formatSigned(trend.strength, 0)}${trend.fresh ? "" : "（旧）"}</span>`;
-}
-
 function renderInstrumentTable() {
   renderSectorFilter();
   const rows = filteredInstruments();
@@ -367,10 +348,9 @@ function renderInstrumentTable() {
     <td class="num ${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</td>
     <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</td>
     <td>${groupBars(item)}</td>
-    <td class="trend-cell">${trendChip(item.trend)}</td>
     <td><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></td>
   </tr>`;
-  }).join("") || `<tr><td colspan="7" class="detail-empty">当前筛选条件下没有品种。</td></tr>`;
+  }).join("") || `<tr><td colspan="6" class="detail-empty">当前筛选条件下没有品种。</td></tr>`;
 }
 
 function seriesFor(symbol) {
@@ -385,7 +365,6 @@ function seriesFor(symbol) {
       close: item.quote?.close ?? null,
       changePct: item.quote?.changePct ?? null,
       structure: item.marginalStructure || "边际待判",
-      trend: item.trend || null,
       basis: item.fundamentals?.basis?.at(-1) ?? null,
       warehouseReceipt: item.fundamentals?.warehouseReceipt?.at(-1) ?? null,
     } : null;
@@ -535,14 +514,6 @@ function fundamentalEvidence(item) {
   </div>`;
 }
 
-function detailRelationship(item) {
-  const temperature = item.trend?.temperature;
-  const trendDirection = ["温", "热", "沸"].includes(temperature) ? 1 : ["凉", "寒", "冻"].includes(temperature) ? -1 : 0;
-  const moneyDirection = Math.sign(numeric(item.amountSignal));
-  if (!trendDirection || !moneyDirection) return "资金与趋势待验证";
-  return trendDirection === moneyDirection ? "资金顺势验证" : "资金与趋势背离";
-}
-
 function technicalValue(value, digits = 2, suffix = "") {
   if (value == null || Number.isNaN(Number(value))) return "暂无";
   return `${Number(value).toLocaleString("zh-CN", { minimumFractionDigits: digits, maximumFractionDigits: digits })}${suffix}`;
@@ -562,7 +533,7 @@ function levelText(levels, emptyText) {
   return levels.map((item) => `${escapeHtml(item.label)} ${technicalValue(item.value, 0)}`).join("；");
 }
 
-function technicalRelationship(technical, item, trend) {
+function technicalRelationship(technical, item) {
   if (!technical || technical.status !== "OK") return "技术指标尚未生成";
   const dailyState = technical.dailyObservation?.state || technical.dailyState;
   const hourState = technical.hourObservation?.state || technical.chan60?.state;
@@ -571,9 +542,7 @@ function technicalRelationship(technical, item, trend) {
   if (!technicalSign) return `日线${dailyState || "未确认"}、60分钟${hourState || "未确认"}，双周期尚未同向`;
   const direction = technicalSign > 0 ? "偏多" : "偏空";
   const moneyRead = !moneySign ? "三方资金中性" : moneySign === technicalSign ? `三方资金${direction}同向` : "三方资金反向";
-  const trendSign = trend?.fresh && ["温", "热", "沸"].includes(trend.temperature) ? 1 : trend?.fresh && ["凉", "寒", "冻"].includes(trend.temperature) ? -1 : 0;
-  const trendRead = !trendSign ? "趋势温度未确认" : trendSign === technicalSign ? "趋势温度同向" : "趋势温度反向";
-  return `技术${direction}；${moneyRead}；${trendRead}`;
+  return `技术${direction}；${moneyRead}`;
 }
 
 function momentumRead(value) {
@@ -603,17 +572,14 @@ function renderDetailWorkspace() {
   const series = seriesFor(item.symbol);
   const quote = item.quote;
   const marketFlow = item.marketFlow;
-  const trend = item.trend;
   const technical = item.technical?.status === "OK" ? item.technical : null;
   const groupRows = [["内资机构", item.groups.domestic], ["外资机构", item.groups.foreign], ["家人原始", item.groups.family]];
   const stockScale = maxAbs(groupRows, ([, group]) => group.netPosition);
   const longTotal = item.brokerRanking.netLong.reduce((sum, entry) => sum + numeric(entry.netPosition), 0);
   const shortTotal = Math.abs(item.brokerRanking.netShort.reduce((sum, entry) => sum + numeric(entry.netPosition), 0));
   const seatBias = longTotal > shortTotal ? "多方样本占优" : shortTotal > longTotal ? "空方样本占优" : "席位样本均衡";
-  const relationship = detailRelationship(item);
-  const technicalRead = technicalRelationship(technical, item, trend);
-  const trendState = trend ? `${trend.temperature || "-"} · ${trend.active ? (trend.stage || (trend.rightSide ? "右侧" : "左侧")) : "未进入趋势"}` : "暂无趋势数据";
-  const researchState = `${item.amountSignal >= 0 ? "资金偏多" : "资金偏空"} · ${trend?.active ? relationship : "等待趋势确认"}`;
+  const technicalRead = technicalRelationship(technical, item);
+  const researchState = `${item.amountSignal >= 0 ? "资金偏多" : "资金偏空"} · ${technicalRead}`;
   const disclosure = currentSnapshot().disclosureDates.at(-1) || "未披露";
   const recentEvents = [...series].reverse().slice(0, 5);
   const latestBasis = item.fundamentals?.basis?.at(-1);
@@ -621,7 +587,6 @@ function renderDetailWorkspace() {
   const fundamentalRead = latestBasis || latestWarehouse
     ? `基差 ${latestBasis ? technicalValue(latestBasis.basis, 2) : "暂无"}；仓单 ${latestWarehouse ? technicalValue(latestWarehouse.warehouse_receipt, 0) : "暂无"}。`
     : "基差与仓单尚无可用公开数据。";
-  const tempOrder = ["凉", "寒", "冻", "平", "温", "热", "沸"];
   const openInterestChange = marketFlow?.openInterestChange;
   const openInterestLabel = openInterestChange == null ? "日增减仓" : openInterestChange >= 0 ? "日增仓" : "日减仓";
   const openInterestValue = openInterestChange == null ? "暂无" : `${Math.abs(numeric(openInterestChange)).toLocaleString("zh-CN", {maximumFractionDigits: 0})} 手`;
@@ -629,25 +594,21 @@ function renderDetailWorkspace() {
       <div class="instrument-detail-title"><span class="instrument-sector-mark"></span><div><p>${escapeHtml(item.sector)} · ${escapeHtml(item.margin.exchange || "交易所未披露")}</p><h2>${escapeHtml(item.variety)} <em>${escapeHtml(item.symbol)}</em></h2></div><span class="contract-pill">主力 ${escapeHtml(quote?.contract || item.margin.contract || "未披露")}</span></div>
       <div class="instrument-detail-quote"><div><small>涨跌幅</small><strong class="${quote?.changePct == null ? "" : signClass(quote.changePct)}">${quote?.changePct == null ? "暂无" : `${formatSigned(quote.changePct, 2)}%`}</strong></div><div><small>收盘价</small><strong>${formatPrice(quote?.close)}</strong></div><div><small>资金流向</small><strong class="${marketFlow?.capitalFlow == null ? "" : signClass(marketFlow.capitalFlow)}">${marketFlow?.capitalFlow == null ? "暂无" : formatAmount(marketFlow.capitalFlow)}</strong></div><div><small>${openInterestLabel}</small><strong class="${openInterestChange == null ? "" : signClass(openInterestChange)}">${openInterestValue}</strong></div></div>
     </header>
-    <div class="detail-source-notice"><strong>真实快照</strong> 席位披露 ${escapeHtml(disclosure)}；行情 ${escapeHtml(quote?.sourceDate || "无数据")} ${escapeHtml(quote?.source || "")}${marketFlow ? `；资金流向/增减仓 ${escapeHtml(marketFlow.sourceDate)} ${escapeHtml(marketFlow.source)}` : ""}；趋势 ${escapeHtml(trend?.sourceDate || "无数据")}。来源日期不同则分开标记，不视为同日事实。</div>
+    <div class="detail-source-notice"><strong>真实快照</strong> 席位披露 ${escapeHtml(disclosure)}；行情 ${escapeHtml(quote?.sourceDate || "无数据")} ${escapeHtml(quote?.source || "")}${marketFlow ? `；资金流向/增减仓 ${escapeHtml(marketFlow.sourceDate)} ${escapeHtml(marketFlow.source)}` : ""}。来源日期不同则分开标记，不视为同日事实。</div>
     <section class="evidence-rail" aria-label="证据链摘要">
       <article><span>01</span><small>行情结构</small><strong class="${quote?.changePct == null ? "" : signClass(quote.changePct)}">${quote?.changePct == null ? "暂无行情" : quote.changePct > 0 ? "当日上涨" : quote.changePct < 0 ? "当日下跌" : "当日持平"}</strong><p>${quote ? `${quote.low == null || quote.high == null ? "日内高低未提供" : `${formatPrice(quote.low)}–${formatPrice(quote.high)}`} · ${escapeHtml(quote.source || "来源未披露")}` : "未取得主力行情"}</p></article>
-      <article><span>02</span><small>趋势温度</small><strong>${escapeHtml(trendState)}</strong><p>${trend ? `强度 ${formatSigned(trend.strength, 1)}${trend.fresh ? "" : " · 非当日"}` : "趋势动物未匹配"}</p></article>
-      <article><span>03</span><small>市场资金</small><strong class="${marketFlow?.capitalFlow == null ? "" : signClass(marketFlow.capitalFlow)}">${marketFlow?.capitalFlow == null ? "暂无" : formatAmount(marketFlow.capitalFlow)}</strong><p>${openInterestLabel} ${openInterestValue}</p></article>
-      <article><span>04</span><small>席位结构</small><strong>${escapeHtml(seatBias)}</strong><p>净多 ${item.brokerRanking.netLong.length}/5 · 净空 ${item.brokerRanking.netShort.length}/5</p></article>
+      <article><span>02</span><small>市场资金</small><strong class="${marketFlow?.capitalFlow == null ? "" : signClass(marketFlow.capitalFlow)}">${marketFlow?.capitalFlow == null ? "暂无" : formatAmount(marketFlow.capitalFlow)}</strong><p>${openInterestLabel} ${openInterestValue}</p></article>
+      <article><span>03</span><small>席位结构</small><strong>${escapeHtml(seatBias)}</strong><p>净多 ${item.brokerRanking.netLong.length}/5 · 净空 ${item.brokerRanking.netShort.length}/5</p></article>
       <article class="decision"><span>结论</span><small>研究状态</small><strong>${escapeHtml(researchState)}</strong><p>${escapeHtml(item.resonance.label || item.direction)}</p></article>
     </section>
-    <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-trend">趋势</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
+    <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
     <section id="detail-overview" class="detail-dashboard-grid">
       <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & FLOW</small><h3>价格与三方资金</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>资金净变动</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
-      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>接口事实</dt><dd>${trend ? `趋势温度“${escapeHtml(trend.temperature)}”，强度 ${formatSigned(trend.strength, 1)}，${trend.rightSide ? "处于右侧" : "未处于右侧"}。` : "趋势数据暂无。"} 三方资金 ${formatAmount(item.amountSignal)}。</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(relationship)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-view="history">查看完整历史路径</button></aside>
+      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>接口事实</dt><dd>三方资金 ${formatAmount(item.amountSignal)}。</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-view="history">查看完整历史路径</button></aside>
     </section>
     <section id="detail-positioning" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>POSITIONING</small><h3>资金与席位结构</h3></div><p>存量净持仓与今日边际分列；家人按原始方向展示</p></div><div class="position-matrix"><div class="position-matrix-head"><span>资金群体</span><span>存量净持仓</span><span>今日手数净变动</span><span>今日净金额</span><span>边际动作</span></div>${groupRows.map(([label, group]) => `<div class="position-matrix-row"><b>${label}</b>${positionVisual(group.netPosition, stockScale)}<strong class="${signClass(group.hands)}">${formatHands(group.hands)}</strong><strong class="${signClass(group.amount)}">${formatAmount(group.amount)}</strong><span class="${signClass(numeric(group.longChange) - numeric(group.shortChange))}">${escapeHtml(flowAction(group))}</span></div>`).join("")}</div><div class="seat-rank-grid detail-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${item.brokerRanking.netLong.length}/5 <span>${rankingDominance(item.brokerRanking.netLong)}</span></div>${rankRows(item.brokerRanking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${item.brokerRanking.netShort.length}/5 <span>${rankingDominance(item.brokerRanking.netShort)}</span></div>${rankRows(item.brokerRanking.netShort, "bear-text", "暂无净空席位")}</div></div></section>
-    <section class="detail-split">
-      <article id="detail-trend" class="detail-surface"><div class="detail-section-head"><div><small>TREND REGIME</small><h3>趋势与周期</h3></div><span class="detail-stamp">API事实</span></div><div class="temperature-scale">${tempOrder.map((name) => `<span class="${trend?.temperature === name ? "is-active" : ""}">${name}</span>`).join("")}</div><div class="trend-fact-row"><span>趋势强度</span><strong>${trend ? formatSigned(trend.strength, 1) : "暂无"}</strong></div><div class="trend-fact-row"><span>右侧状态</span><strong>${trend ? (trend.rightSide ? "是" : "否") : "暂无"}</strong></div><div class="trend-fact-row"><span>进入天数</span><strong>${trend?.daysSinceEntry == null ? "暂无" : `${trend.daysSinceEntry} 天`}</strong></div><p class="detail-panel-note">趋势动物直接事实与本页资金判断分列。温度为“平”或数据非当日时，不把它写成右侧趋势确认。</p></article>
-      <article id="detail-technical" class="detail-surface technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
+    <article id="detail-technical" class="detail-surface detail-wide-section technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
         ${technical ? `<div class="technical-period-grid">${timeframeEvidence("日线观察", technical.dailyChan, technical.dailyObservation)}${timeframeEvidence("60分钟观察", technical.chan60, technical.hourObservation)}</div><div class="technical-compact-read"><p><b>量仓：</b>${escapeHtml(technical.marketActivity?.label || "数据不足")} · ${escapeHtml(technical.marketActivity?.impulse || "无法确认")}；成交较前日 ${technical.marketActivity?.volumeRatio == null ? "暂无" : technicalValue((technical.marketActivity.volumeRatio - 1) * 100, 1, "%")}。</p><p><b>位置：</b>支撑 ${levelText(technical.keyLevels?.supports, "暂无")}；压力 ${levelText(technical.keyLevels?.resistances, "暂无")}。</p><p><b>双周期：</b>${escapeHtml(technicalRead)}。</p></div><p class="detail-panel-note">EMA顺序为 5 / 20 / 60；数据日 ${escapeHtml(technical.sourceDate)}，60分钟截至 ${escapeHtml(technical.chan60?.endTime || "无法确认")}。技术观察不替代资金面与基本面。</p>` : `<div class="data-gap"><strong>当前技术面覆盖沪银、焦煤、燃油、生猪、碳酸锂和鸡蛋</strong><p>该品种尚未生成技术快照，不使用其他品种或旧日数据填充。</p></div>`}</article>
-    </section>
     <article id="detail-fundamental" class="detail-surface detail-wide-section fundamental-surface"><div class="detail-section-head"><div><small>FUNDAMENTALS</small><h3>基本面证据板</h3></div><span class="detail-stamp neutral">事实与缺口分列</span></div>${fundamentalEvidence(item)}<p class="detail-panel-note">基差口径为现货价减主力期货价；仓单使用东方财富期货库存数据。供需、现金成本与产业库存未接入前不作推断。</p></article>
     <section id="detail-events" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>EVENT PATH</small><h3>历史事件</h3></div><p>快照事实按披露日追溯</p></div><div class="event-timeline">${recentEvents.map((entry) => `<div><time>${formatDate(entry.date)}</time><b class="${signClass(entry.amount)}">${formatAmount(entry.amount)}</b><p>${escapeHtml(entry.structure)} · ${formatHands(entry.hands)} 手${entry.close == null ? "" : ` · 收盘 ${formatPrice(entry.close)}`}</p></div>`).join("")}</div></section>`;
 }
@@ -685,7 +646,7 @@ function renderStatus() {
   const fetchStatus = Object.entries(summary.fetchStatus).map(([key, value]) => `<div class="status-line"><span>${escapeHtml(key)}</span><strong>${value} 个席位</strong></div>`).join("");
   $("#statusPanel").innerHTML = `<section class="status-block"><h3>席位披露</h3><div class="status-list"><div class="status-line"><span>报告日期</span><strong>${formatDate(snapshot.date)}</strong></div><div class="status-line"><span>网页披露日</span><strong>${escapeHtml(snapshot.disclosureDates.join(" / ") || "未披露")}</strong></div>${fetchStatus}</div></section>
     <section class="status-block"><h3>保证金口径</h3><div class="status-list"><div class="status-line"><span>覆盖率</span><strong>${(summary.marginCoverage * 100).toFixed(1)}%</strong></div><div class="status-line"><span>来源更新</span><strong>${escapeHtml(summary.marginSourceUpdate || "未披露")}</strong></div><div class="status-line"><span>缓存状态</span><strong>${escapeHtml(summary.marginCacheNote || "未知")}</strong></div></div></section>
-    <section class="status-block"><h3>行情、趋势与基本面</h3><div class="status-list"><div class="status-line"><span>当日收盘行情</span><strong>${summary.quoteFreshCount || 0} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>当日趋势品种</span><strong>${summary.trendFreshCount} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>期现基差覆盖</span><strong>${summary.basisCoveredCount || 0} 个</strong></div><div class="status-line"><span>仓单覆盖</span><strong>${summary.warehouseCoveredCount || 0} 个</strong></div></div></section>`;
+    <section class="status-block"><h3>行情与基本面</h3><div class="status-list"><div class="status-line"><span>当日收盘行情</span><strong>${summary.quoteFreshCount || 0} / ${summary.instrumentCount}</strong></div><div class="status-line"><span>期现基差覆盖</span><strong>${summary.basisCoveredCount || 0} 个</strong></div><div class="status-line"><span>仓单覆盖</span><strong>${summary.warehouseCoveredCount || 0} 个</strong></div></div></section>`;
 }
 
 function orderDecisionSignals(items) {
@@ -706,7 +667,7 @@ function upsertDecision(symbol) {
       runId: state.manifest?.runId || state.date, createdAt: new Date().toISOString(),
       amountSignal: item.amountSignal, handsSignal: item.handsSignal,
       close: item.quote?.close ?? null, changePct: item.quote?.changePct ?? null,
-      trend: item.trend?.temperature || "", brokerRanking: item.brokerRanking,
+      brokerRanking: item.brokerRanking,
       tradeStatus: "no_trade", direction: "", mainContradiction: "",
       trigger: "", positionPct: "", invalidation: "", closeNote: "", pnl: "",
       attribution: {}, reviewNote: "",
@@ -789,7 +750,7 @@ function renderDecisionView() {
   const attrField = (key, label) => `<label>${label}<select name="attr_${key}">${option("", "—", (record.attribution || {})[label])}${option("Y", "Y", (record.attribution || {})[label])}${option("N", "N", (record.attribution || {})[label])}</select></label>`;
   const attribution = record.attribution || {};
   $("#decisionEditor").innerHTML = `<form id="decisionForm"><header><div><small>${formatDate(record.reportDate)} · ${escapeHtml(record.runId)}</small><h3>${escapeHtml(record.variety)} ${escapeHtml(record.symbol)}</h3></div><div class="decision-market-facts"><strong class="${signClass(record.amountSignal)}">${formatAmount(record.amountSignal)}</strong><strong class="${record.changePct == null ? "" : signClass(record.changePct)}">${record.changePct == null ? "涨跌 暂无" : `${formatSigned(record.changePct, 2)}%`}</strong></div></header>
-    <div class="decision-facts"><span>手数 ${formatHands(record.handsSignal)}</span><span>收盘 ${formatPrice(record.close)}</span><span>趋势 ${escapeHtml(record.trend || "暂无")}</span></div>
+    <div class="decision-facts"><span>手数 ${formatHands(record.handsSignal)}</span><span>收盘 ${formatPrice(record.close)}</span></div>
     <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
     <div class="decision-form-grid">
       <label>交易状态<select name="tradeStatus">${option("no_trade","未交易",record.tradeStatus)}${option("open","持仓中",record.tradeStatus)}${option("closed","已平仓",record.tradeStatus)}</select></label>

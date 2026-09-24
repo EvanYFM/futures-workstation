@@ -303,16 +303,6 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
   font: 600 13px/1.4 var(--serif); letter-spacing: .06em;
 }
 .panorama-group-rows { min-width: 0; }
-.trend-table-head, .trend-row { display: grid; grid-template-columns: minmax(100px, 1fr) 140px minmax(140px, 1.2fr) 88px 110px; gap: 12px; align-items: center; }
-.trend-table-head { padding: 7px 13px; background: var(--paper-soft); color: var(--gray); font-size: 10px; letter-spacing: .08em; }
-.trend-row { width: 100%; padding: 9px 13px; border: 0; border-top: 1px solid var(--line); background: transparent; color: var(--ink); text-align: left; }
-.trend-row:hover { background: var(--paper-soft); }
-.trend-name strong, .trend-name small { display: block; }
-.trend-name strong { font: 600 13px/1.4 var(--serif); }
-.trend-name small, .trend-stage, .source-date { margin-top: 2px; color: var(--gray); font-size: 9px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.trend-money { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 8px; align-items: center; min-width: 0; }
-.trend-money strong { text-align: right; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.source-date.is-stale { color: var(--cinnabar); }
 
 .panorama-head { display: grid; grid-template-columns: 128px minmax(140px, .9fr) minmax(120px, .7fr) minmax(220px, 1.25fr) minmax(120px, .8fr); gap: 14px; align-items: center; padding: 8px 14px; background: var(--paper-soft); color: var(--gray); font-size: 10px; letter-spacing: .08em; }
 .panorama-row { display: grid; grid-template-columns: minmax(140px, .9fr) minmax(120px, .7fr) minmax(220px, 1.25fr) minmax(120px, .8fr); gap: 14px; align-items: center; }
@@ -353,35 +343,11 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .broker-highlight-row span small { margin-top: 1px; color: var(--gray); font-size: 8px; }
 .broker-highlight-row > strong { text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 
-/* ================= 总览 · 天气/情绪/状态 ================= */
-.overview-band { min-width: 0; }
-.overview-split { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, .8fr); gap: 22px; margin-top: 40px; }
-.weather-list { margin-top: 12px; background: var(--paper); border: 1px solid var(--line); }
-.weather-row { display: grid; grid-template-columns: 84px 92px minmax(0, 1fr) 74px; gap: 12px; align-items: start; padding: 9px 13px; border-top: 1px solid var(--line); font-size: 11px; }
-.weather-row:first-child { border-top: 0; }
-.risk-level { display: inline-flex; justify-content: center; padding: 1px 7px; font-size: 10px; border: 1px solid var(--line); white-space: nowrap; }
-.risk-level.high { color: var(--up); border-color: var(--up); background: var(--up-soft); }
-.risk-level.medium { color: var(--neutral); border-color: var(--neutral); background: var(--neutral-soft); }
-.weather-reason { color: var(--gray); line-height: 1.5; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-
-.sentiment-panel { margin-top: 10px; padding: 14px; background: var(--paper); border: 1px solid var(--line); }
-.sentiment-head { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
-.sentiment-head span, .sentiment-head strong { display: block; }
-.sentiment-head span { color: var(--gray); font-size: 10px; }
-.sentiment-head strong { margin-top: 3px; font: 600 15px/1.3 var(--serif); }
-.sentiment-score { min-width: 54px; padding: 8px; border: 1px solid var(--line); text-align: center; font: 600 17px/1.3 var(--serif); font-variant-numeric: tabular-nums; }
-.sentiment-score.bullish { color: var(--up); background: var(--up-soft); border-color: var(--up); }
-.sentiment-score.bearish { color: var(--down); background: var(--down-soft); border-color: var(--down); }
-.sentiment-meta { margin-top: 9px; color: var(--gray); font-size: 9px; }
-.sentiment-panel p { margin: 11px 0; font-size: 11px; line-height: 1.55; }
-.sentiment-nick { display: grid; gap: 5px; padding: 10px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); font-size: 10px; line-height: 1.55; }
-.sentiment-nick strong { color: var(--neutral); }
-.sentiment-panel details { margin-top: 10px; font-size: 10px; }
-.sentiment-panel summary { cursor: pointer; color: var(--gray); }
-.sentiment-panel ul { margin: 8px 0 0; padding-left: 17px; color: var(--gray); line-height: 1.5; }
-.sentiment-panel > small { display: block; margin-top: 10px; color: var(--gray); line-height: 1.45; }
-
-.overview-status { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 1px; margin-top: 14px; background: var(--line); border: 1px solid var(--line); }
+/* ================= 总览 · 状态 ================= */
+/* 天气与 A 股社区情绪板块已于 2026-09-24 随数据源一并取消：
+   前端从未有对应容器（renderWeather 是死代码），快照字段也无人消费。
+   若日后恢复，需同时补回 index.html 容器、渲染函数与本节样式。 */
+.overview-status { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; margin-top: 14px; background: var(--line); border: 1px solid var(--line); }
 .overview-status article { min-width: 0; padding: 12px 13px; background: var(--paper); }
 .overview-status span, .overview-status strong, .overview-status small { display: block; }
 .overview-status span { color: var(--gray); font-size: 9px; letter-spacing: .08em; }
@@ -431,11 +397,6 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .group-line { display: grid; grid-template-columns: 28px minmax(24px, 1fr) 66px; gap: 7px; align-items: center; min-width: 0; }
 .group-line label { color: var(--gray); font-size: 9px; white-space: nowrap; }
 .group-line output { text-align: right; font-variant-numeric: tabular-nums; font-size: 9px; white-space: nowrap; }
-.trend-cell { min-width: 88px; }
-.trend-chip { display: inline-flex; align-items: center; gap: 5px; padding: 2px 7px; border: 1px solid var(--line); background: var(--paper-soft); font-size: 10px; white-space: nowrap; }
-.trend-chip.is-stale { color: var(--gray); }
-.trend-chip.bullish { color: var(--up); border-color: var(--up); background: var(--up-soft); }
-.trend-chip.bearish { color: var(--down); border-color: var(--down); background: var(--down-soft); }
 
 /* ================= 详情面板(全景右栏 + CTA) ================= */
 .detail-panel { position: sticky; top: 68px; min-height: 520px; padding: 16px; background: var(--paper); border: 1px solid var(--line); }
@@ -579,8 +540,6 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .position-matrix-row > strong { font-variant-numeric: tabular-nums; }
 .position-matrix-row > span:last-child { font-weight: 700; }
 .detail-ranks { margin-top: 15px; }
-.detail-split { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
-.detail-split > article { scroll-margin-top: 150px; }
 .detail-stamp { padding: 3px 7px; background: var(--down-soft); color: var(--down); font-size: 9px; white-space: nowrap; }
 .detail-stamp.bullish { background: var(--up-soft); color: var(--up); }
 .detail-stamp.bearish { background: var(--down-soft); color: var(--down); }
@@ -624,11 +583,6 @@ h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); font-weight: 600; lette
 .technical-compact-read { margin-top: 8px; padding: 8px 11px; border-left: 3px solid var(--cinnabar); background: var(--paper-soft); }
 .technical-compact-read p { margin: 0; font-size: 11px; line-height: 1.6; }
 .technical-compact-read p + p { margin-top: 4px; }
-.temperature-scale { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; padding: 10px 0; }
-.temperature-scale span { display: grid; place-items: center; min-height: 30px; border: 1px solid var(--line); font-size: 11px; font-weight: 600; white-space: nowrap; }
-.temperature-scale span.is-active { color: var(--paper); background: var(--ink); border-color: var(--ink); }
-.trend-fact-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); color: var(--gray); font-size: 10px; }
-.trend-fact-row strong { color: var(--ink); }
 .detail-panel-note { margin: 12px 0 0; padding-top: 10px; border-top: 1px solid var(--line); color: var(--gray); font-size: 10px; line-height: 1.6; }
 .fundamental-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
 .fundamental-grid div { min-height: 78px; padding: 11px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); min-width: 0; }
@@ -997,7 +951,7 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .instrument-layout { grid-template-columns: minmax(0, 1fr); }
   .detail-panel { position: static; min-height: 0; }
   .evidence-rail { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .detail-dashboard-grid, .detail-split { grid-template-columns: minmax(0, 1fr); }
+  .detail-dashboard-grid { grid-template-columns: minmax(0, 1fr); }
   .technical-summary { grid-template-columns: 120px minmax(0, 1fr) 150px; }
   .technical-layer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .technical-layer-grid article:last-child { grid-column: 1 / -1; }
@@ -1016,14 +970,11 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .key-event-row > span:last-child { display: none; }
   .sector-sides { grid-template-columns: minmax(0, 1fr); }
   .sector-side + .sector-side { border-left: 0; border-top: 1px solid var(--line); }
-  .trend-table-head, .panorama-head { display: none; }
-  .trend-row { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; align-items: start; }
-  .trend-row > span:nth-child(3) { grid-column: 1 / -1; }
+  .panorama-head { display: none; }
   .panorama-group { grid-template-columns: minmax(0, 1fr); }
   .panorama-group > header { padding: 9px 13px; border-right: 0; border-bottom: 1px solid var(--line-strong); }
   .panorama-row { grid-template-columns: minmax(0, 1fr) minmax(100px, .75fr); gap: 11px; align-items: start; }
   .panorama-row > span:nth-child(3), .panorama-row > span:nth-child(4) { grid-column: 1 / -1; }
-  .weather-row { grid-template-columns: 70px 80px minmax(0, 1fr); }
   .filter-bar { flex-wrap: wrap; }
   .search-field { flex-basis: 100%; }
   .filter-bar select { flex: 1 1 120px; }
@@ -1054,7 +1005,6 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .technical-period-grid { grid-template-columns: minmax(0, 1fr); }
   .technical-layer-grid article:last-child { grid-column: auto; }
   .event-timeline { grid-template-columns: minmax(0, 1fr); }
-  .temperature-scale { grid-template-columns: repeat(7, minmax(30px, 1fr)); overflow-x: auto; }
   .decision-signals, .decision-layout, .decision-form-grid { grid-template-columns: minmax(0, 1fr); }
   .decision-form-grid label.wide { grid-column: auto; }
   .decision-signal { align-items: flex-start; flex-direction: column; }
