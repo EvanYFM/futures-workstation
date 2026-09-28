@@ -1,0 +1,89 @@
+name: guard-data-publish
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+
+      - name: 数据发布提交白名单守门
+        run: |
+          set -euo pipefail
+          python3 - <<'EOF'
+          import json, os, subprocess, sys
+
+          # 守门规则（2026-09-28 与 Evan 确认）：
+          # "data: ..." 前缀的数据发布提交只准动数据与清单文件。
+          # 前端文件（app.js / history-store.js / journal-sync.js / styles-v2.css / assets）
+          # 出现在数据发布提交里 = 发布 Agent 越界覆盖功能代码（09-22 事故复现），CI 拒绝。
+          # index.html 允许变更 ?v= 缓存戳行（发布管线惯例），其余内容变更也拒绝。
+          # 功能改动必须走独立 feat/fix 提交，接受正常评审。
+
+          FRONTEND = {"app.js", "history-store.js", "journal-sync.js", "styles-v2.css"}
+          event = os.environ.get("GITHUB_EVENT_NAME")
+          path = os.environ.get("GITHUB_EVENT_PATH", "")
+          commits = []
+          if event == "push" and path and os.path.exists(path):
+              payload = json.load(open(path, encoding="utf-8"))
+              commits = [c["id"] for c in payload.get("commits", [])]
+          elif event == "pull_request" and path and os.path.exists(path):
+              payload = json.load(open(path, encoding="utf-8"))
+              pr = payload["pull_request"]
+              # 分页拉取 PR 提交
+              url = pr["commits_url"] + "?per_page=100"
+              import urllib.request
+              while url:
+                  req = urllib.request.Request(url, headers={"Authorization": f"token {os.environ.get('GITHUB_TOKEN','')}", "User-Agent": "ci"})
+                  page = json.load(urllib.request.urlopen(req))
+                  commits += [c["sha"] for c in page]
+                  url = None  # 简化：PR 提交超 100 个再补分页
+          if not commits:
+              print("无待检提交（首次推送或非 push/PR 触发），跳过")
+              sys.exit(0)
+
+          violations = []
+          for sha in commits:
+              subject = subprocess.run(["git", "log", "-1", "--format=%s", sha],
+                                        capture_output=True, text=True, check=True).stdout.strip()
+              if not subject.lower().startswith("data:"):
+                  print(f"✓ {sha[:8]} 非数据发布提交（{subject[:50]}），不适用白名单")
+                  continue
+              files = subprocess.run(["git", "diff-tree", "--no-commit-id", "--name-only", "-r", sha],
+                                     capture_output=True, text=True, check=True).stdout.splitlines()
+              for f in files:
+                  if f.startswith("data/") or f == "run-manifest.json":
+                      continue
+                  if f == "index.html":
+                      # 校验 index.html 变更只含 ?v= 缓存戳行
+                      diff = subprocess.run(["git", "diff-tree", "--no-commit-id", "-p", sha, "--", "index.html"],
+                                            capture_output=True, text=True, check=True).stdout
+                      changed = [l for l in diff.splitlines()
+                                 if (l.startswith("+") or l.startswith("-")) and not l.startswith(("+++", "---"))]
+                      non_stamp = [l for l in changed if "?v=" not in l]
+                      if non_stamp:
+                          violations.append(f"{sha[:8]} 「{subject[:50]}」index.html 含非缓存戳内容变更（{len(non_stamp)} 行）")
+                      continue
+                  if f in FRONTEND or f.startswith("assets/"):
+                      violations.append(f"{sha[:8]} 「{subject[:50]}」动了前端文件 {f}")
+                  else:
+                      violations.append(f"{sha[:8]} 「{subject[:50]}」动了白名单外文件 {f}")
+          if violations:
+              print("✗ 数据发布提交越界：")
+              for v in violations:
+                  print("  -", v)
+              print("数据发布只准动 data/**、run-manifest.json（index.html 仅限 ?v= 缓存戳）。前端改动请走独立 feat/fix 提交。")
+              sys.exit(1)
+          print("✓ 全部提交通过白名单守门")
+          EOF
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
