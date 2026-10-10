@@ -48,6 +48,7 @@ const sourceFileDate = (name) => {
   return match ? formatDate(match[1]) : "无数据";
 };
 const formatAxisAmount = (value) => numeric(value) === 0 ? "0" : `${formatSigned(numeric(value) / 1e8, 1)}亿`;
+const motionBehavior = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 const currentSnapshot = () => state.data.snapshots[state.date];
 const DETAIL_SEARCH_ALIASES = { FU: "燃油", AG: "白银", JM: "焦煤", I: "铁矿石", LH: "生猪", LC: "碳酸锂", JD: "鸡蛋", P: "棕榈油", RU: "天然橡胶" };
 const CORE_GROUPS = [
@@ -339,11 +340,11 @@ function renderInstrumentTable() {
     const closeCell = close == null ? `<span class="gray">暂无</span>` : `${numeric(close).toLocaleString("zh-CN", {maximumFractionDigits: 4})}<span class="${dayReturn == null ? "gray" : signClass(dayReturn)}" style="margin-left:6px">${dayReturn == null ? "—" : `${formatSigned(dayReturn, 2)}%`}</span>`;
     return `<tr class="${item.symbol === state.activeSymbol ? "is-active" : ""}" data-symbol="${escapeHtml(item.symbol)}">
     <td><div class="instrument-name"><button type="button" data-open-detail-symbol="${escapeHtml(item.symbol)}">${escapeHtml(item.variety)}</button><small>${escapeHtml(item.symbol)} · ${escapeHtml(item.sector)}</small></div></td>
+    <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</td>
+    <td><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></td>
     <td class="num">${closeCell}</td>
     <td class="num ${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</td>
-    <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</td>
     <td>${groupBars(item)}</td>
-    <td><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></td>
   </tr>`;
   }).join("") || `<tr><td colspan="6" class="detail-empty">当前筛选条件下没有品种。</td></tr>`;
 }
@@ -368,9 +369,9 @@ function seriesFor(symbol) {
 
 function sparkline(values, tone = "bullish", large = false, dates = [], prices = []) {
   if (!values.length) return "";
-  const width = large ? 720 : 280;
+  const width = large ? (window.matchMedia("(max-width: 860px)").matches ? 360 : 720) : 280;
   const height = large ? 220 : 72;
-  const padding = large ? {top: 18, right: 16, bottom: 28, left: 64} : {top: 6, right: 6, bottom: 6, left: 6};
+  const padding = large ? {top: 18, right: 64, bottom: 34, left: 70} : {top: 6, right: 6, bottom: 6, left: 6};
   const max = Math.max(...values, 0);
   const min = Math.min(...values, 0);
   const range = max - min || 1;
@@ -422,7 +423,7 @@ function priceFlowChart(series, variety) {
   const width = 920;
   const height = 310;
   const left = 64;
-  const right = 72;
+  const right = 88;
   const inner = width - left - right;
   const xFor = (index) => left + (series.length === 1 ? inner / 2 : index / (series.length - 1) * inner);
   const closes = series.map((entry) => entry.close).filter((value) => value != null).map(numeric);
@@ -461,7 +462,7 @@ function factLineChart(rows, field, label) {
   const points = (rows || []).filter((item) => item[field] != null);
   if (!points.length) return `<div class="fact-chart-empty">暂无可用历史数据</div>`;
   const width = 430, height = 150;
-  const padding = {top: 14, right: 14, bottom: 25, left: 58};
+  const padding = {top: 14, right: 28, bottom: 28, left: 64};
   const values = points.map((item) => numeric(item[field]));
   const max = Math.max(...values), min = Math.min(...values);
   const range = max - min || Math.max(1, Math.abs(max) * 0.02);
@@ -599,7 +600,7 @@ function renderDetailWorkspace() {
     <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
     <section id="detail-overview" class="detail-dashboard-grid">
       <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & FLOW</small><h3>价格与三方资金</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>资金净变动</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
-      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>接口事实</dt><dd>三方资金 ${formatAmount(item.amountSignal)}。</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-view="history">查看完整历史路径</button></aside>
+      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>接口事实</dt><dd>三方资金 ${formatAmount(item.amountSignal)}。</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
     </section>
     <section id="detail-positioning" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>POSITIONING</small><h3>资金与席位结构</h3></div><p>存量净持仓与今日边际分列；家人按原始方向展示</p></div><div class="position-matrix"><div class="position-matrix-head"><span>资金群体</span><span>存量净持仓</span><span>今日手数净变动</span><span>今日净金额</span><span>边际动作</span></div>${groupRows.map(([label, group]) => `<div class="position-matrix-row"><b>${label}</b>${positionVisual(group.netPosition, stockScale)}<strong class="${signClass(group.hands)}">${formatHands(group.hands)}</strong><strong class="${signClass(group.amount)}">${formatAmount(group.amount)}</strong><span class="${signClass(numeric(group.longChange) - numeric(group.shortChange))}">${escapeHtml(flowAction(group))}</span></div>`).join("")}</div><div class="seat-rank-grid detail-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${item.brokerRanking.netLong.length}/5 <span>${rankingDominance(item.brokerRanking.netLong)}</span></div>${rankRows(item.brokerRanking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${item.brokerRanking.netShort.length}/5 <span>${rankingDominance(item.brokerRanking.netShort)}</span></div>${rankRows(item.brokerRanking.netShort, "bear-text", "暂无净空席位")}</div></div></section>
     <section id="detail-technical" class="detail-surface detail-wide-section technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
@@ -631,7 +632,7 @@ function renderHistory() {
   $("#historyControls").innerHTML = `<label>观察品种 <select id="historySymbolSelect">${symbols.map((item) => `<option value="${escapeHtml(item.symbol)}" ${item.symbol === state.historySymbol ? "selected" : ""}>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</option>`).join("")}</select></label>`;
   const series = seriesFor(state.historySymbol);
   const current = currentSnapshot().instruments.find((item) => item.symbol === state.historySymbol);
-  $("#historyPanel").innerHTML = `<section class="history-chart"><div class="history-chart-head"><h3>${escapeHtml(current?.variety || state.historySymbol)} · 资金与价格</h3><span><i></i>资金净变动 <b></b>收盘价</span></div><div class="large-spark">${sparkline(series.map((entry) => entry.amount), dirClass(series.at(-1)?.amount || 0), true, series.map((entry) => entry.date), series.map((entry) => entry.close))}</div></section>
+  $("#historyPanel").innerHTML = `<section class="history-chart"><div class="history-chart-head"><h3>${escapeHtml(current?.variety || state.historySymbol)} · 资金与价格</h3><span><i class="${dirClass(series.at(-1)?.amount || 0)}"></i>资金净变动 <b></b>收盘价</span></div><div class="large-spark">${sparkline(series.map((entry) => entry.amount), dirClass(series.at(-1)?.amount || 0), true, series.map((entry) => entry.date), series.map((entry) => entry.close))}</div></section>
     <section class="history-table"><h3>披露日快照</h3><div class="history-rows">${[...series].reverse().map((entry) => `<div class="history-row"><span>${formatDate(entry.date)}</span><strong class="${signClass(entry.hands)}">${formatHands(entry.hands)} 手</strong><strong class="${signClass(entry.amount)}">${formatAmount(entry.amount)}</strong></div>`).join("")}</div></section>`;
 }
 
@@ -811,7 +812,7 @@ function startObservationEdit(id) {
   state.pendingMatchDate = null;
   state.editingObservationId = id;
   switchView("decisions");
-  requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: "smooth", block: "start"}));
+  requestAnimationFrame(() => $("#decisionEditor")?.scrollIntoView({behavior: motionBehavior(), block: "start"}));
 }
 
 function renderObservationEditor() {
@@ -1200,13 +1201,15 @@ function bindEvents() {
     const ctaRow = event.target.closest("[data-cta-symbol]");
     if (ctaRow) { state.activeCtaSymbol = ctaRow.dataset.ctaSymbol; renderCta(); }
     const detailName = event.target.closest("[data-open-detail-symbol]");
-    if (detailName) { state.activeSymbol = detailName.dataset.openDetailSymbol; switchView("detail"); window.scrollTo({top: 0, behavior: "smooth"}); }
+    if (detailName) { state.activeSymbol = detailName.dataset.openDetailSymbol; switchView("detail"); window.scrollTo({top: 0, behavior: motionBehavior()}); }
     const focus = event.target.closest("[data-open-symbol]");
-    if (focus) { state.activeSymbol = focus.dataset.openSymbol; switchView("detail"); window.scrollTo({top: 0, behavior: "smooth"}); }
+    if (focus) { state.activeSymbol = focus.dataset.openSymbol; switchView("detail"); window.scrollTo({top: 0, behavior: motionBehavior()}); }
+    const historyContext = event.target.closest("[data-history-context]");
+    if (historyContext) { state.historySymbol = historyContext.dataset.historyContext; switchView("history"); window.scrollTo({top: 0, behavior: motionBehavior()}); }
     const detailAnchor = event.target.closest("[data-detail-anchor]");
     if (detailAnchor) {
       $$("[data-detail-anchor]").forEach((button) => button.classList.toggle("is-active", button === detailAnchor));
-      document.getElementById(detailAnchor.dataset.detailAnchor)?.scrollIntoView({behavior: "smooth", block: "start"});
+      document.getElementById(detailAnchor.dataset.detailAnchor)?.scrollIntoView({behavior: motionBehavior(), block: "start"});
     }
     const direction = event.target.closest("[data-direction]");
     if (direction) {
@@ -1219,7 +1222,7 @@ function bindEvents() {
     const decisionPage = event.target.closest("[data-decision-page]");
     if (decisionPage) { state.decisionPage = numeric(decisionPage.dataset.decisionPage); renderDecisionView(); }
     const createDecision = event.target.closest("[data-create-decision]");
-    if (createDecision) { openOrCreateCard(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: "smooth"}); }
+    if (createDecision) { openOrCreateCard(createDecision.dataset.createDecision); switchView("decisions"); window.scrollTo({top: 0, behavior: motionBehavior()}); }
     const historySymbol = event.target.closest("[data-history-symbol]");
     if (historySymbol) { state.historyJournalSymbol = historySymbol.dataset.historySymbol; renderHistoryView(); }
     const editObs = event.target.closest("[data-edit-observation]");
