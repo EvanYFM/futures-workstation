@@ -12,14 +12,16 @@ const TH = () => document.documentElement.dataset.theme === 'dark' ? {
   line:'rgba(232,229,218,.18)', split:'rgba(232,229,218,.08)', split2:'rgba(232,229,218,.06)',
   mark:'rgba(232,229,218,.28)', bubble:'#141412',
   tipbg:'#23231f', tiptext:'#f0ede4',
-  upA:'rgba(226,114,107,.68)', downA:'rgba(63,167,149,.68)', goldA:'rgba(179,167,143,.18)'
+  upA:'rgba(226,114,107,.68)', downA:'rgba(63,167,149,.68)', goldA:'rgba(179,167,143,.18)',
+  hm:['#3f5a54','#2e2e2b','#7a4a45'], quad:'#6a6862', clab:'#b0ada3'
 } : {
-  ink:'#37352f', text:TH().text, sub:TH().sub,
-  up:TH().up, down:TH().down, accent:TH().accent, gold:TH().gold,
-  line:'rgba(55,53,47,0.16)', split:'rgba(55,53,47,0.07)', split2:TH().split2,
-  mark:TH().mark, bubble:'#fff',
+  ink:'#37352f', text:'#787774', sub:'#9b9a97',
+  up:'#d44c47', down:'#0f7b6c', accent:'#2383e2', gold:'#9a8f7d',
+  line:'rgba(55,53,47,0.16)', split:'rgba(55,53,47,0.07)', split2:'rgba(55,53,47,0.06)',
+  mark:'rgba(55,53,47,0.22)', bubble:'#fff',
   tipbg:'#37352f', tiptext:'#fff',
-  upA:TH().upA, downA:TH().downA, goldA:TH().goldA
+  upA:'rgba(212,76,71,0.68)', downA:'rgba(15,123,108,0.68)', goldA:'rgba(154,143,125,0.14)',
+  hm:['#6fa79e','#e9e8e4','#d99692'], quad:'#c4c3bf', clab:'#5f5e5b'
 };
 let AX, TIP;
 function refreshPalette() {
@@ -142,7 +144,7 @@ mk('ch-indflow', {
   grid:{left:70,right:56,top:10,bottom:20},
   tooltip:{...TIP, formatter: p => `<b>${p.name}</b><br>主力净流入 ${sgn(p.value)}${fmt(p.value)} 亿元<br><span style="opacity:.65">当日涨跌见右侧坐标</span>`},
   xAxis:{type:'value',...AX},
-  yAxis:{type:'category',data:inds.map(i=>i.name),...AX,axisLabel:{color:'#37352f',fontSize:11.5}},
+  yAxis:{type:'category',data:inds.map(i=>i.name),...AX,axisLabel:{color:TH().ink,fontSize:11.5}},
   series:[{type:'bar',barWidth:13,
     data:inds.map(i=>({value:i.flow, itemStyle:{color:i.flow>=0?TH().up:TH().down,opacity:.82},
       label:{show:Math.abs(i.flow)>20,position:i.flow>=0?'right':'left',color:TH().text,fontSize:10,
@@ -160,7 +162,7 @@ $('broad-cards').innerHTML = DATA.broad_styles.map(b => `
       60D <b class="${cls(b.r60)} num">${sgn(b.r60)}${fmt(b.r60)}%</b> · 1Y <b class="${cls(b.r250)} num">${sgn(b.r250)}${fmt(b.r250)}%</b>
     </div>
   </div>`).join('');
-const BCOLORS = {'上证50':'#37352f','沪深300':TH().sub,'中证500':'#c9c8c4','中证1000':TH().up,'国证成长':'#e8913d','国证价值':TH().down};
+const BCOLORS = {'上证50':TH().ink,'沪深300':TH().sub,'中证500':'#c9c8c4','中证1000':TH().up,'国证成长':'#e8913d','国证价值':TH().down};
 mk('ch-broad', {
   grid:{left:40,right:16,top:30,bottom:46},
   tooltip:{...TIP, trigger:'axis', formatter: ps => ps.map(p=>`${p.marker}${p.seriesName} <b>${fmt(p.value[1],1)}</b>`).join('<br>')},
@@ -348,12 +350,12 @@ mk('ch-sw5d', {
     const dots = st && st.streak !== 0 ? ` ${st.streak > 0 ? '●'.repeat(Math.abs(st.streak)) : '○'.repeat(Math.abs(st.streak))}` : '';
     return r.name + dots;
   }),axisLine:{show:false},axisTick:{show:false},
-    axisLabel:{color:'#37352f',fontSize:11.5,margin:8,
+    axisLabel:{color:TH().ink,fontSize:11.5,margin:8,
       formatter: v => v, rich:{}}},
   visualMap:{min:-3,max:3,calculable:false,orient:'vertical',right:0,top:'center',itemHeight:90,
-    inRange:{color:[TH().down,'#6fa79e','#e9e8e4','#d99692',TH().up]},
+    inRange:{color:[TH().down,TH().hm[0],TH().hm[1],TH().hm[2],TH().up]},
     textStyle:{color:TH().sub,fontSize:10}},
-  series:[{type:'heatmap',data:hmData,label:{show:true,fontSize:10,color:'#37352f',
+  series:[{type:'heatmap',data:hmData,label:{show:true,fontSize:10,color:TH().ink,
     formatter: p => (p.data[2] > 0 ? '+' : '') + p.data[2].toFixed(1)},
     itemStyle:{borderColor:TH().bubble,borderWidth:1.5},emphasis:{itemStyle:{shadowBlur:4,shadowColor:'rgba(0,0,0,.2)'}}}]
 });
@@ -384,13 +386,13 @@ mk('ch-concept', {
     data:CM.map(c => ({value:[c.yest, c.today, c], name:c.name,
       symbolSize:conceptSize(c.flow || 2),
       itemStyle:{color: c.today >= 0 ? TH().upA : TH().downA, borderColor:TH().bubble,borderWidth:1}})),
-    label:{show:true,position:'top',fontSize:10.5,color:'#5f5e5b',
+    label:{show:true,position:'top',fontSize:10.5,color:TH().clab,
       formatter:p => showNames.has(p.data.name) ? p.data.name : '',
       labelLayout:{hideOverlap:true, moveOverlap:'shiftY'}},
     markLine:{symbol:'none',silent:true,lineStyle:{color:TH().mark,type:'dashed'},
       label:{show:false},data:[{xAxis:0},{yAxis:0}]},
     markArea:{silent:true,itemStyle:{color:'rgba(0,0,0,0)'},
-      label:{show:true,position:'inside',color:'#c4c3bf',fontSize:11,fontWeight:500},
+      label:{show:true,position:'inside',color:TH().quad,fontSize:11,fontWeight:500},
       data:[[{name:'↗ 延续强化',xAxis:0,yAxis:0},{xAxis:'max',yAxis:'max'}],
             [{name:'逆势反转 ↖',xAxis:'min',yAxis:0},{xAxis:0,yAxis:'max'}],
             [{name:'退潮 ↘',xAxis:0,yAxis:'min'},{xAxis:'max',yAxis:0}],
@@ -432,7 +434,7 @@ mk('ch-margin', {
   series:[
     {name:'沪市',type:'bar',stack:'m',barWidth:26,data:MG.series.map(s=>s.sse),itemStyle:{color:'#c8b89a',opacity:.85}},
     {name:'深市',type:'bar',stack:'m',data:MG.series.map(s=>s.szse),itemStyle:{color:TH().gold,opacity:.85}},
-    {name:'合计',type:'line',data:MG.series.map(s=>s.total),lineStyle:{width:2,color:'#37352f'},itemStyle:{color:'#37352f'},symbolSize:5}
+    {name:'合计',type:'line',data:MG.series.map(s=>s.total),lineStyle:{width:2,color:TH().ink},itemStyle:{color:TH().ink},symbolSize:5}
   ]
 });
 $('mg-note').textContent = `最新合计约 ${(MG.today_total/1e4).toFixed(2)} 万亿（${MG.note}）；${MG.delta != null ? '较上一完整交易日' + (MG.delta >= 0 ? '增加 ' : '减少 ') + Math.abs(MG.delta).toLocaleString() + ' 亿' : ''}。`;
