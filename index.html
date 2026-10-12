@@ -46,6 +46,7 @@
         <button class="nav-item" data-view="cta">CTA 评分</button>
         <button class="nav-item" data-view="decisions">交易日志</button>
         <button class="nav-item" data-view="history">历史回看</button>
+        <button class="nav-item" data-view="ashare">A股仪表盘</button>
         <button class="taiji" id="themeBtn" type="button" aria-label="日夜切换">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle class="t-ring" cx="12" cy="12" r="9.5"/>
@@ -233,6 +234,36 @@
         </div>
         <div id="statusPanel" class="status-panel"></div>
       </section>
+
+      <!-- A股每日仪表盘(独立子站iframe, 数据与期货完全解耦) -->
+      <section id="view-ashare" class="view" aria-labelledby="ashare-title">
+        <div class="section-heading top-heading">
+          <div><span class="section-index">附</span><h2 id="ashare-title">A股每日仪表盘</h2></div>
+          <p>行业轮动 / 资金流向 / 风格与短线情绪 · 按日快照, 与期货数据管道独立</p>
+        </div>
+        <div class="ashare-wrap">
+          <div class="ashare-bar">
+            <span id="ashareStatus" class="ashare-status">子站加载中…</span>
+            <a id="ashareOpen" class="ashare-open" href="./a-share/" target="_blank" rel="noopener">新窗口打开 ↗</a>
+          </div>
+          <iframe id="ashareFrame" class="ashare-frame" src="./a-share/" title="A股每日仪表盘" loading="lazy"></iframe>
+        </div>
+      </section>
+
+      <script>
+        /* A股子站加载状态提示 */
+        (function () {
+          var frame = document.getElementById('ashareFrame');
+          var status = document.getElementById('ashareStatus');
+          if (!frame || !status) return;
+          frame.addEventListener('load', function () {
+            status.textContent = '子站已就绪 · 站内顶部可切换历史交易日';
+          });
+          frame.addEventListener('error', function () {
+            status.textContent = '子站加载失败，请点右侧新窗口打开';
+          });
+        })();
+      </script>
 
       <!-- 六 交易日志 -->
       </main>

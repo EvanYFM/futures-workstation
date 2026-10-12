@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>A股行业轮动与资金流向监控仪表盘</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=Inter:wght@400;500;600&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+:root{
+  --ink:#37352f; --ink2:#787774; --ink3:#9b9a97;
+  --line:rgba(55,53,47,0.09); --line2:rgba(55,53,47,0.16);
+  --up:#d44c47; --down:#0f7b6c; --accent:#2383e2;
+  --upbg:rgba(212,76,71,0.08); --downbg:rgba(15,123,108,0.08);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:transparent;color:var(--ink);
+  font-family:'Inter','Noto Sans SC',-apple-system,sans-serif;
+  font-size:14px;line-height:1.625;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:48px 32px 80px}
+.serif{font-family:'Source Serif 4','Noto Serif SC',Georgia,serif}
+.num{font-variant-numeric:tabular-nums}
+a{color:var(--accent);text-decoration:none}
+.up{color:var(--up)} .down{color:var(--down)} .flat{color:var(--ink2)}
+
+/* header */
+.masthead{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:8px}
+.masthead h1{font-family:'Source Serif 4','Noto Serif SC',serif;font-size:30px;font-weight:700;letter-spacing:.5px}
+.masthead .sub{color:var(--ink2);font-size:13px;margin-top:8px}
+.masthead .sub b{color:var(--ink);font-weight:600}
+.meta-chips{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
+.chip{font-size:12px;color:var(--ink2);border:1px solid var(--line2);border-radius:4px;padding:2px 10px}
+.mini-table{font-size:12.5px;width:100%}
+.mini-table .row{display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px dashed var(--line)}
+.mini-table .row:last-child{border-bottom:none}
+.mini-table .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--ink)}
+.mini-table .val{font-variant-numeric:tabular-nums;font-weight:500}
+.mini-table .sub{color:var(--ink3);font-size:11.5px;font-variant-numeric:tabular-nums}
+.lb-box{display:flex;flex-wrap:wrap;gap:8px;padding-top:4px}
+.lb-item{border:1px solid var(--line2);border-radius:6px;padding:6px 12px;text-align:center}
+.lb-item .n{font-size:20px;font-weight:600;font-variant-numeric:tabular-nums}
+.lb-item .t{font-size:11.5px;color:var(--ink3)}
+.dots{font-size:10px;letter-spacing:1px}
+.dots.up{color:var(--up)}.dots.down{color:var(--down)}
+
+/* section */
+section{padding:34px 0 6px;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:none}
+.sec-head{display:flex;align-items:baseline;gap:10px;margin-bottom:6px}
+.sec-head h2{font-family:'Source Serif 4','Noto Serif SC',serif;font-size:21px;font-weight:600}
+.sec-head .tag{font-size:12px;color:var(--ink3)}
+.sec-desc{color:var(--ink2);font-size:13px;margin-bottom:20px;max-width:760px}
+h3.blk{font-size:13px;font-weight:600;color:var(--ink);margin:26px 0 12px;display:flex;gap:6px;align-items:center}
+h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
+
+/* cards */
+.cards{display:grid;gap:12px}
+.cards.c4{grid-template-columns:repeat(4,1fr)}
+.cards.c3{grid-template-columns:repeat(3,1fr)}
+.cards.c5{grid-template-columns:repeat(5,1fr)}
+.cards.c6{grid-template-columns:repeat(6,1fr)}
+@media(max-width:900px){.cards.c4,.cards.c5,.cards.c6{grid-template-columns:repeat(2,1fr)}.cards.c3{grid-template-columns:1fr}}
+.card{border:1px solid var(--line2);border-radius:6px;padding:14px 16px;background:transparent;transition:border-color .15s}
+.card:hover{border-color:rgba(55,53,47,0.4)}
+.card .k{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;align-items:center}
+.card .v{font-size:22px;font-weight:600;margin-top:4px;letter-spacing:.2px}
+.card .s{font-size:12px;color:var(--ink3);margin-top:2px}
+.card .mini{font-size:11.5px;color:var(--ink3);margin-top:6px;line-height:1.55}
+.card .mini b{color:var(--ink2);font-weight:500}
+
+/* 涨跌家数条 */
+.breadth{margin-top:14px}
+.breadth-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 6px}
+.breadth-bar .seg-up{background:var(--up);opacity:.75}
+.breadth-bar .seg-flat{background:#c9c8c4}
+.breadth-bar .seg-down{background:var(--down);opacity:.75}
+.breadth-cap{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2)}
+
+/* 资金主线 */
+.flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:900px){.flow-grid{grid-template-columns:1fr}}
+.order-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:10px}
+.order-card{border:1px solid var(--line2);border-radius:6px;padding:10px 12px}
+.order-card .ok{font-size:11.5px;color:var(--ink2)}
+.order-card .ov{font-size:17px;font-weight:600;margin-top:2px}
+.order-card .os{font-size:11px;color:var(--ink3)}
+.chart{width:100%;height:230px}
+.chart.tall{height:640px}
+.chart.mid{height:300px}
+.chart.small{height:200px}
+
+/* 行业热力网格 */
+.heat-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+@media(max-width:900px){.heat-grid{grid-template-columns:repeat(4,1fr)}}
+.cell{border-radius:5px;padding:9px 6px;text-align:center;cursor:default;border:1px solid transparent;transition:transform .1s,border-color .1s}
+.cell:hover{transform:translateY(-1px);border-color:rgba(55,53,47,0.35)}
+.cell .cn{font-size:12px;font-weight:500;display:block;white-space:nowrap}
+.cell .cp{font-size:12.5px;font-weight:600;display:block;margin-top:1px}
+#heat-tip{position:fixed;z-index:99;background:#37352f;color:#fff;border-radius:5px;padding:8px 12px;font-size:12px;line-height:1.6;pointer-events:none;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:240px}
+.legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--ink2);margin:10px 0 14px;flex-wrap:wrap}
+.legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+/* 五风格 */
+.style-rank{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+.rank-pill{border:1px solid var(--line2);border-radius:14px;padding:3px 13px;font-size:12.5px}
+.window-tabs{display:flex;gap:6px;margin:6px 0 10px}
+.wtab{border:1px solid var(--line2);background:transparent;border-radius:4px;padding:3px 14px;font-size:12.5px;color:var(--ink2);cursor:pointer;font-family:inherit}
+.wtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.sig-box{border:1px solid var(--line2);border-left:3px solid var(--ink);border-radius:6px;padding:14px 18px;margin-top:14px;background:rgba(55,53,47,0.025)}
+.sig-box .sb-t{font-weight:600;font-size:13.5px}
+.sig-box .sb-b{color:var(--ink2);font-size:13px;margin-top:6px}
+.matrix{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
+.matrix th{font-weight:500;color:var(--ink2);text-align:right;padding:7px 10px;border-bottom:1px solid var(--line)}
+.matrix th:first-child{text-align:left}
+.matrix td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
+.matrix td:first-child{text-align:left;font-weight:500}
+.matrix tr:hover td{background:rgba(55,53,47,0.03)}
+.spread-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
+@media(max-width:900px){.spread-grid{grid-template-columns:1fr}}
+.spread-card{border:1px solid var(--line2);border-radius:6px;padding:11px 14px}
+.spread-card .sk{font-size:11.5px;color:var(--ink2)}
+.spread-card .sv{font-size:18px;font-weight:600;margin-top:2px}
+.spread-card .ss{font-size:11.5px;color:var(--ink3);margin-top:3px}
+
+/* 北向 */
+.nb-top{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
+.nb-pill{border:1px solid var(--line2);border-radius:6px;padding:8px 14px;font-size:12.5px}
+.nb-pill b{font-weight:600}
+
+/* 研判 */
+.call-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:900px){.call-cards{grid-template-columns:1fr}}
+.call-card{border:1px solid var(--line2);border-radius:6px;padding:16px 18px}
+.call-card .cc-tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:3px;padding:2px 9px;margin-bottom:9px;letter-spacing:.5px}
+.cc-tag.over{background:var(--upbg);color:var(--up);border:1px solid rgba(212,76,71,.35)}
+.cc-tag.watch{background:rgba(35,131,226,0.08);color:var(--accent);border:1px solid rgba(35,131,226,.35)}
+.cc-tag.reduce{background:var(--downbg);color:var(--down);border:1px solid rgba(15,123,108,.35)}
+.call-card .cc-t{font-size:15px;font-weight:600}
+.call-card .cc-b{font-size:12.8px;color:var(--ink2);margin-top:8px;line-height:1.7}
+.call-card .cc-b b{color:var(--ink);font-weight:600}
+.call-card .cc-e{font-size:11.5px;color:var(--ink3);margin-top:10px;padding-top:9px;border-top:1px dashed var(--line)}
+
+/* footer */
+.foot{padding-top:30px;color:var(--ink3);font-size:12px;line-height:1.8}
+.foot .disc{margin-top:12px;padding:12px 16px;border:1px solid var(--line);border-radius:6px;color:var(--ink2)}
+.src{margin-top:6px}
+
+/* 日期导航条 */
+.datebar{display:flex;align-items:center;gap:16px;padding:10px 0 14px;margin-bottom:26px;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.db-brand{width:30px;height:30px;display:grid;place-items:center;background:var(--ink);color:#fff;border-radius:7px;font-weight:600;font-size:15px}
+.db-nav{display:flex;align-items:center;gap:8px}
+.dbtn{border:1px solid var(--line2);background:#fff;border-radius:6px;padding:6px 13px;font-size:13px;color:var(--ink);cursor:pointer;font-family:inherit}
+.dbtn:hover:not(:disabled){border-color:var(--ink3)}
+.dbtn:disabled{opacity:.35;cursor:default}
+.dbtn-pri{background:var(--ink);color:#fff;border-color:var(--ink)}
+.dsel{border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:13.5px;font-family:inherit;color:var(--ink);background:#fff;font-variant-numeric:tabular-nums}
+.dbstat{font-size:12px;color:var(--ink3);margin-left:auto}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="datebar">
+  <span class="db-brand">股</span>
+  <div class="db-nav">
+    <button class="dbtn" id="nav-prev">‹ 前一日</button>
+    <select id="date-sel" class="dsel"></select>
+    <button class="dbtn" id="nav-next">后一日 ›</button>
+    <button class="dbtn dbtn-pri" id="nav-latest">最新</button>
+  </div>
+  <span class="dbstat" id="db-status">加载中…</span>
+</div>
+
+
+<!-- ═══════════ 头部 ═══════════ -->
+<div class="masthead">
+  <h1>📅 A股行业轮动与资金流向监控仪表盘</h1>
+  <div class="sub">数据日期：<b id="mh-date">—</b> · 收盘复盘 · 生成于 <span id="mh-gen">—</span></div>
+  <div class="meta-chips" id="mh-chips"></div>
+</div>
+
+<!-- ═══════════ ① 大盘概览与今日资金主线 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>① 大盘概览与今日资金主线</h2><span class="tag">Market Overview &amp; Money Flow</span></div>
+  <div class="sec-desc" data-desc="overview">三大指数午后<b>探底回升</b>集体收涨——创业板指盘中一度跌超 3% 后翻红；影视传媒午后爆发、大金融板块强势做多提振人气，热点快速轮动，小盘相对占优。</div>
+
+  <div class="cards c4" id="idx-cards"></div>
+
+  <div class="breadth">
+    <h3 class="blk">涨跌家数 <span class="hint">全A口径 · 数据宝/腾讯行情测算</span></h3>
+    <div class="breadth-bar">
+      <div class="seg-up" id="seg-up"></div><div class="seg-flat" id="seg-flat"></div><div class="seg-down" id="seg-down"></div>
+    </div>
+    <div class="breadth-cap">
+      <span class="up">▲ 上涨 <b id="nb-up"></b></span>
+      <span class="flat">■ 持平 <b id="nb-flat"></b></span>
+      <span class="down">▼ 下跌 <b id="nb-down"></b></span>
+      <span>涨停 <b class="up num" id="nb-lu"></b> · 跌停 <b class="down num" id="nb-ld"></b>（含 ±10%±及以上测算）</span>
+    </div>
+  </div>
+
+  <h3 class="blk">今日资金主线：单型资金净分布 <span class="hint">东方财富口径 · 主力 = 超大单 + 大单</span></h3>
+  <div class="flow-grid">
+    <div class="card">
+      <div class="k"><span>超大单净流入</span><span id="ff-super-pct"></span></div>
+      <div class="v num" id="ff-super"></div>
+      <div class="mini">流入 <b id="ff-super-in"></b> / 流出 <b id="ff-super-out"></b> 亿元</div>
+    </div>
+    <div class="card">
+      <div class="k"><span>大单净流入</span><span id="ff-big-pct"></span></div>
+      <div class="v num" id="ff-big"></div>
+      <div class="mini">流入 <b id="ff-big-in"></b> / 流出 <b id="ff-big-out"></b> 亿元</div>
+    </div>
+    <div class="card">
+      <div class="k"><span>中单净流入</span><span></span></div>
+      <div class="v num" id="ff-mid"></div>
+      <div class="mini">流入 <b id="ff-mid-in"></b> / 流出 <b id="ff-mid-out"></b> 亿元</div>
+    </div>
+    <div class="card">
+      <div class="k"><span>小单净流入</span><span></span></div>
+      <div class="v num" id="ff-small"></div>
+      <div class="mini">流入 <b id="ff-small-in"></b> / 流出 <b id="ff-small-out"></b> 亿元</div>
+    </div>
+  </div>
+  <div class="flow-grid" style="margin-top:10px">
+    <div class="card">
+      <div class="k"><span>主力资金分板块净流入（数据宝口径）</span></div>
+      <div class="order-cards">
+        <div class="order-card"><div class="ok">创业板</div><div class="ov down num" id="sp-cy"></div><div class="os">亿元</div></div>
+        <div class="order-card"><div class="ok">科创板</div><div class="ov down num" id="sp-kc"></div><div class="os">亿元</div></div>
+        <div class="order-card"><div class="ok">沪深300成份</div><div class="ov down num" id="sp-hs"></div><div class="os">亿元</div></div>
+      </div>
+      <div class="mini" style="margin-top:8px" id="ff-note"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>近5个交易日主力净流入（亿元）</span></div>
+      <div class="chart small" id="ch-main5d"></div>
+    </div>
+  </div>
+
+  <h3 class="blk">成交额一年分位 <span class="hint">申万A指口径（沪深，不含北交所）· 过去一年日线</span></h3>
+  <div class="flow-grid">
+    <div class="card">
+      <div class="k"><span>今日两市成交（申万A指口径）</span><span id="tp-badge" class="num"></span></div>
+      <div class="v num" id="tp-today"></div>
+      <div class="mini">一年分位 <b id="tp-pct"></b> · 中位数 <b id="tp-med"></b> · 90分位 <b id="tp-p90"></b> · 20日均值 <b id="tp-ma20"></b>（亿元）</div>
+      <div class="mini" style="margin-top:4px" id="tp-note"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>近一年成交额分布与今日位置</span></div>
+      <div class="chart small" id="ch-turnover"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ② 31行业涨跌热力网格 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>② 申万一级行业涨跌热力网格</h2><span class="tag">31 Industries Heatmap</span></div>
+  <div class="sec-desc" data-desc="heat">涨跌幅采用申万官方指数收盘口径；<b>悬停任意行业可查看当日主力资金净流入</b>（证券时报·数据宝口径，亿元）。</div>
+  <div class="legend">
+    <span><span class="sw" style="background:rgba(212,76,71,.75)"></span>上涨</span>
+    <span><span class="sw" style="background:#c9c8c4"></span>持平</span>
+    <span><span class="sw" style="background:rgba(15,123,108,.75)"></span>下跌</span>
+    <span style="color:var(--ink3)">色深代表涨跌幅度</span>
+  </div>
+  <div class="heat-grid" id="heat-grid"></div>
+  <div id="heat-tip"></div>
+</section>
+
+<!-- ═══════════ ③ 近5日行业滚动热力图 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>③ 近5日行业轮动滚动热力图</h2><span class="tag">5-Day Rolling Heatmap · 连续性标记</span></div>
+  <div class="sec-desc" data-desc="roll">申万 31 个一级行业近 5 个交易日<b>逐日涨跌</b>（行按 5 日累计涨跌排序，右侧标签含累计值）。行名后圆点数 = <b>连续净流入/流出周期数</b>（同花顺口径：今日 / 3日 / 5日资金净额同向记 3 点，两周期同向记 2 点）。</div>
+  <div class="chart tall" id="ch-sw5d"></div>
+  <div class="flow-grid" style="margin-top:14px">
+    <div class="card">
+      <div class="k"><span>连续净流入行业（同花顺口径 · 亿元）</span></div>
+      <div id="ths-in" class="mini-table"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>连续净流出行业（同花顺口径 · 亿元）</span></div>
+      <div id="ths-out" class="mini-table"></div>
+    </div>
+  </div>
+  <div class="mini" style="margin-top:8px;color:var(--ink3)">注：同花顺行业分类（90 个）与申万一级（31 个）口径不同，连续性榜单独立展示；申万口径的逐日主力资金历史因东方财富接口限制暂缺，用涨跌连续性 + 当日净额近似刻画。</div>
+</section>
+
+<!-- ═══════════ ④ 主力资金行业净流入排行 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>④ 主力资金行业净流入排行</h2><span class="tag">Sector Fund Flow · Diverging</span></div>
+  <div class="sec-desc" data-desc="indflow">全部 31 个申万一级行业按当日主力资金净额双向排列：15 个行业净流入、16 个行业净流出。<b>传媒</b>以 +30.67 亿居首，<b>电子</b>以 −133.40 亿居尾——硬件算力链遭集中减仓、内容应用链获增持的分化极其显著。</div>
+  <div class="chart tall" id="ch-indflow"></div>
+</section>
+
+<!-- ═══════════ ⑤ 风格轮动强弱 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑤ 风格轮动强弱：大盘价值 ↔ 小盘成长</h2><span class="tag">Broad-Base Style Rotation</span></div>
+  <div class="sec-desc" data-desc="style">当日<b>小盘成长相对占优</b>（中证1000 +0.24% &gt; 上证50 +0.08%，国证成长 +0.23% &gt; 国证价值 +0.15%）；但拉长到 20/60 日，<b>价值与大盘防御明显跑赢</b>——国证价值 20 日仅 −2.23%，显著强于国证成长的 −7.07%。</div>
+  <div class="cards c6" id="broad-cards"></div>
+  <h3 class="blk">宽基指数近一年归一化走势 <span class="hint" id="broad-range">起点=100</span></h3>
+  <div class="chart mid" id="ch-broad"></div>
+</section>
+
+<!-- ═══════════ ⑥ 中国五风格走势 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑥ 中国五风格走势</h2><span class="tag">CITICS Style Index · 金融/稳定/消费/周期/成长</span></div>
+  <div class="sec-desc" data-desc="style5">采用<b>中信风格指数实际点位</b>（Tushare ci_daily，CI005917–CI005921，非 ETF 代理）。近 60 日<b>金融最强（+4.43%）、成长最弱（−22.73%）</b>；但近 5 日出现修复迹象——稳定与消费领涨，成长超跌反弹动能在积累。</div>
+
+  <div class="cards c5" id="style-cards"></div>
+
+  <h3 class="blk">风格强弱排序 <span class="hint">按近60日收益</span></h3>
+  <div class="style-rank" id="style-rank"></div>
+
+  <h3 class="blk">五风格归一化走势 <span class="hint">支持窗口切换</span></h3>
+  <div class="window-tabs" id="style-tabs">
+    <button class="wtab" data-w="5">5D</button>
+    <button class="wtab" data-w="20">20D</button>
+    <button class="wtab" data-w="60">60D</button>
+    <button class="wtab on" data-w="0">1Y</button>
+  </div>
+  <div class="chart mid" id="ch-style"></div>
+
+  <h3 class="blk">市场风格评价区</h3>
+  <div class="sig-box">
+    <div class="sb-t" id="sig-title"></div>
+    <div class="sb-b" id="sig-body"></div>
+  </div>
+  <div class="cards c5" id="style-evals" style="margin-top:12px"></div>
+
+  <h3 class="blk">风格轮动矩阵 <span class="hint">单位 % · 红=涨 绿=跌 · 色深=幅度</span></h3>
+  <table class="matrix" id="style-matrix"></table>
+
+  <h3 class="blk">风格价差与拥挤度 <span class="hint">价差=多周期收益之差 · 拥挤度基于风格间动量离散度测算，仅供参考</span></h3>
+  <div class="spread-grid" id="spreads"></div>
+</section>
+
+<!-- ═══════════ ⑦ 北向资金动向与趋势 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑦ 北向资金动向与趋势</h2><span class="tag">Northbound Turnover</span></div>
+  <div class="sec-desc" data-desc="north">2024-08 起北向不再披露逐日净买入，<b>成交规模与占比</b>成为观察外资参与度的核心口径。10月9日北向成交 <b>2967.35 亿元</b>，占两市总成交 <b>15.61%</b>，节后连续两日放量回升；成交倾向集中于<b>AI 硬件算力链（中际旭创、新易盛）与核心资产（宁德时代、药明康德）</b>。</div>
+  <div class="cards c3">
+    <div class="card">
+      <div class="k"><span>当日北向成交额</span></div>
+      <div class="v num" id="north-amt">—</div>
+      <div class="mini" id="north-sub">—</div>
+    </div>
+    <div class="card">
+      <div class="k"><span>沪股通成交前三</span></div>
+      <div class="mini" style="margin-top:8px;font-size:13px;line-height:2" id="nb-sh"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>深股通成交前三</span></div>
+      <div class="mini" style="margin-top:8px;font-size:13px;line-height:2" id="nb-sz"></div>
+    </div>
+  </div>
+  <h3 class="blk">近5个交易日北向成交规模与占比 <span class="hint">柱=成交额(亿) · 线=占两市成交比</span></h3>
+  <div class="chart mid" id="ch-north"></div>
+</section>
+
+<!-- ═══════════ ⑧ 概念热度延续与切换 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑧ 概念热度：延续 or 切换</h2><span class="tag">Concept Momentum · 今日 vs 昨日 四象限</span></div>
+  <div class="sec-desc" data-desc="concept">横轴 = 昨日涨跌、纵轴 = 今日涨跌，气泡大小 = 今日资金净额。<b>右上 = 延续强化</b>，<b>左上 = 逆势反转</b>，<b>右下 = 退潮</b>，<b>左下 = 持续走弱</b>。样本为今日涨跌幅 / 净额榜前列的 27 个热门概念（同花顺概念指数口径）。</div>
+  <div class="chart mid" id="ch-concept"></div>
+</section>
+
+<!-- ═══════════ ⑨ 短线情绪与杠杆资金 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑨ 短线情绪与杠杆资金</h2><span class="tag">Limit-Up Pool · Margin Trading · ETF</span></div>
+  <div class="sec-desc" data-desc="emotion">涨停池为交易所口径（含连板数 / 封板时间 / 炸板统计）；两融余额沪市为 10-09、深市为 10-08（T+1 披露）；ETF 为股票 / 债券型成交榜（剔除货币型）。</div>
+
+  <div class="cards c4" id="zt-cards"></div>
+
+  <div class="flow-grid" style="margin-top:10px">
+    <div class="card">
+      <div class="k"><span>连板梯队</span></div>
+      <div id="lb-ladder" class="lb-box"></div>
+      <div class="mini" style="margin-top:6px" id="zt-ind-chips"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>封板节奏与炸板</span></div>
+      <div id="seal-stats" class="mini-table"></div>
+    </div>
+  </div>
+
+  <div class="flow-grid" style="margin-top:10px">
+    <div class="card">
+      <div class="k"><span>沪深两融余额（亿元）</span></div>
+      <div class="chart small" id="ch-margin"></div>
+      <div class="mini" style="margin-top:4px" id="mg-note"></div>
+    </div>
+    <div class="card">
+      <div class="k"><span>ETF 成交额榜 TOP10 <span class="hint">剔除货币型 · 亿元</span></span></div>
+      <div id="etf-list" class="mini-table"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════ ⑩ 行业配置研判 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑩ 行业配置研判</h2><span class="tag">3 Calls · 结合五风格多周期表现</span></div>
+  <div class="sec-desc" data-desc="calls">基于当日资金流向、行业景气信号与五风格多周期表现给出的三条方向性研判。<b>仅供参考，不构成投资建议。</b></div>
+  <div class="call-cards" id="call-cards"></div>
+  <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
+    <div class="sb-t" id="call-sig-t">—</div>
+    <div class="sb-b" id="call-sig-b">—</div>
+  </div>
+</section>
+
+<!-- ═══════════ 页脚 ═══════════ -->
+<div class="foot">
+  <div class="src">
+    数据来源：申万宏源研究（申万一级行业指数）· 证券时报·数据宝《10月9日主力资金流向日报》（行业与个股主力资金）· 东方财富数据中心（单型资金分布、大盘资金流历史）· 新浪财经/腾讯行情（指数收盘、涨跌家数测算）· 交易所/东方财富Choice（北向资金成交）· Tushare ci_daily（中信风格指数 CI005917–CI005921）· 同花顺（概念资金流）· 财联社/央视财经（收评叙事）
+  </div>
+  <div class="disc">⚠️ 本仪表盘由 AI 自动生成，仅作信息整理与研究参考，<b>不构成任何投资建议</b>。数据以各官方披露为准，不同数据商对"主力资金"口径存在差异（本页已分别标注）。股市有风险，投资需谨慎。</div>
+</div>
+
+</div>
+
+
+<script src="app.js"></script>
+</body>
+</html>

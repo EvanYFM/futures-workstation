@@ -1093,3 +1093,22 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   white-space: nowrap; text-align: right;
 }
 .netflow-block .sector-item span strong { font-variant-numeric: tabular-nums; }
+
+/* ── A股每日仪表盘子站（iframe 嵌入, 数据管道与期货独立） ── */
+.ashare-wrap { display: flex; flex-direction: column; gap: 10px; }
+.ashare-bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  font-size: 12.5px; color: var(--gray);
+}
+.ashare-status { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ashare-open {
+  color: var(--ink); text-decoration: none; white-space: nowrap;
+  border-bottom: 1px dashed var(--line-strong); padding-bottom: 1px;
+}
+.ashare-open:hover { color: var(--cinnabar); border-bottom-color: var(--cinnabar); }
+.ashare-frame {
+  width: 100%; height: min(86vh, 1180px);
+  border: 1px solid var(--line); border-radius: 10px;
+  background: transparent;
+}
+[data-theme="dark"] .ashare-frame { border-color: rgba(232, 229, 218, .18); }
