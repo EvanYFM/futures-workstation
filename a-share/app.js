@@ -216,12 +216,68 @@ function renderStyle(w) {
   else styleChart.setOption(opt, true);
 }
 renderStyle(0);
+renderParticipants(DATA.participants);
 $('style-tabs').addEventListener('click', e => {
   if (!e.target.dataset.w) return;
   document.querySelectorAll('#style-tabs .wtab').forEach(b => b.classList.remove('on'));
   e.target.classList.add('on');
   renderStyle(+e.target.dataset.w);
 });
+
+
+/* ── ⑪ 市场参与者分析 ── */
+function renderParticipants(P) {
+  if (!P) return;
+  $('p-cards').innerHTML = P.cards.map(c => `
+    <div class="p-card">
+      <div class="p-head"><b>${c.name}</b><span class="p-state ${c.cls}">${c.state}</span></div>
+      <div class="p-role">${c.role}</div>
+      <div class="p-metrics">${c.metrics.map(m => `<div><span>${m[0]}</span><b>${m[1]}</b></div>`).join('')}</div>
+      <div class="p-note">${c.note}</div>
+    </div>`).join('');
+
+  const t = TH();
+  const C = P.chart, E = P.external;
+  mk('ch-part', {
+    tooltip: {trigger:'axis', ...TIP, formatter: ps => ps.filter(p=>p.value!=null).map(p =>
+      `${p.marker}${p.seriesName}: <b>${p.value==null?'—':p.seriesName==='沪深300(归一)'?p.value.toFixed(1):p.value.toFixed(2)+'%'}</b>`).join('<br>')},
+    legend:{top:0,textStyle:{color:t.text,fontSize:11},itemWidth:16,itemHeight:2},
+    grid:{left:46,right:50,top:30,bottom:24},
+    xAxis:{type:'category',data:C.dates,...AX,axisLabel:{...AX.axisLabel,formatter:v=>v.slice(2,7)}},
+    yAxis:[{type:'value',scale:true,...AX,name:'归一',nameTextStyle:{color:t.sub}},
+           {type:'value',...AX,name:'%',nameTextStyle:{color:t.sub}}],
+    series:[
+      {name:'沪深300(归一)',type:'line',data:C.market,yAxisIndex:0,showSymbol:false,
+       lineStyle:{width:1.6,color:t.ink},itemStyle:{color:t.ink},
+       areaStyle:{color:t.goldA}},
+      {name:'红利超额(保险)',type:'line',data:C.div_excess,yAxisIndex:1,showSymbol:false,
+       lineStyle:{width:1.4,color:t.gold},itemStyle:{color:t.gold}},
+      {name:'小盘超额(量化)',type:'line',data:C.small_excess,yAxisIndex:1,showSymbol:false,
+       lineStyle:{width:1.4,color:t.accent},itemStyle:{color:t.accent}},
+      {name:'融资余额变动(杠杆)',type:'line',data:C.margin_chg,yAxisIndex:1,showSymbol:false,
+       lineStyle:{width:1.4,color:t.up,type:'solid'},itemStyle:{color:t.up}}
+    ]
+  });
+  mk('ch-ext', {
+    tooltip:{trigger:'axis',...TIP},
+    legend:{top:0,textStyle:{color:t.text,fontSize:11},itemWidth:16,itemHeight:2},
+    grid:{left:46,right:52,top:28,bottom:24},
+    xAxis:{type:'category',data:E.dates,...AX,axisLabel:{...AX.axisLabel,formatter:v=>v.slice(2,7)}},
+    yAxis:[{type:'value',scale:true,...AX,name:'US10Y %',nameTextStyle:{color:t.sub}},
+           {type:'value',...AX,name:'CNY %',nameTextStyle:{color:t.sub}}],
+    series:[
+      {name:'美债10Y(%)',type:'line',data:E.us10y,yAxisIndex:0,showSymbol:false,
+       lineStyle:{width:1.5,color:t.up},itemStyle:{color:t.up}},
+      {name:'人民币20日变动(%)',type:'line',data:E.usdcny_chg,yAxisIndex:1,showSymbol:false,
+       lineStyle:{width:1.4,color:t.gold},itemStyle:{color:t.gold},
+       markLine:{symbol:'none',silent:true,data:[{yAxis:0}],lineStyle:{color:t.mark,type:'dashed'}}}
+    ]
+  });
+
+  $('attr-table').innerHTML = '<thead><tr><th>时期</th><th>阶段</th><th>主导参与者</th><th>证据</th><th>市场表现</th></tr></thead><tbody>' +
+    P.attribution.map(a => `<tr><td>${a.period}</td><td>${a.title}</td><td class="aw">${a.who}</td><td>${a.evidence}</td><td>${a.move}</td></tr>`).join('') + '</tbody>';
+  $('p-concl-b').textContent = P.conclusion;
+}
 
 /* 信号箱 */
 $('sig-title').textContent = `🔍 风格信号：${DATA.style_regime.regime}`;

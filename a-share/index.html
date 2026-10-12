@@ -29,7 +29,7 @@
   --line:rgba(55,53,47,0.09); --line2:rgba(55,53,47,0.16);
   --up:#d44c47; --down:#0f7b6c; --accent:#2383e2;
   --upbg:rgba(212,76,71,0.08); --downbg:rgba(15,123,108,0.08);
-  --paper:#ffffff; --flat:#c9c8c4; --hover:rgba(55,53,47,0.4);
+  --paper:#ffffff; --flat:#c9c8c4; --hover:rgba(55,53,47,0.4); --gold2:#8a6d3b;
   --tipbg:#37352f; --tiptext:#fff; --softbg:rgba(55,53,47,0.03);
 }
 html[data-theme="dark"]{
@@ -37,7 +37,7 @@ html[data-theme="dark"]{
   --line:rgba(232,229,218,.10); --line2:rgba(232,229,218,.18);
   --up:#e2726b; --down:#3fa795; --accent:#6cb2f5;
   --upbg:rgba(226,114,107,.12); --downbg:rgba(63,167,149,.12);
-  --paper:#141412; --flat:#4a4a46; --hover:rgba(232,229,218,.45);
+  --paper:#141412; --flat:#4a4a46; --hover:rgba(232,229,218,.45); --gold2:#c9a86a;
   --tipbg:#23231f; --tiptext:#f0ede4; --softbg:rgba(232,229,218,.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
@@ -153,6 +153,29 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .nb-top{display:flex;gap:10px;flex-wrap:wrap;margin-top:8px}
 .nb-pill{border:1px solid var(--line2);border-radius:6px;padding:8px 14px;font-size:12.5px}
 .nb-pill b{font-weight:600}
+
+/* 参与者 */
+.p-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:900px){.p-grid{grid-template-columns:1fr}}
+.p-card{border:1px solid var(--line2);border-radius:6px;padding:14px 16px;background:var(--paper)}
+.p-head{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.p-head b{font-size:14.5px}
+.p-state{font-size:11px;font-weight:600;border-radius:3px;padding:2px 8px;white-space:nowrap}
+.p-state.over{background:var(--upbg);color:var(--up);border:1px solid rgba(212,76,71,.35)}
+.p-state.down{background:var(--downbg);color:var(--down);border:1px solid rgba(15,123,108,.35)}
+.p-state.watch{background:rgba(35,131,226,.08);color:var(--accent);border:1px solid rgba(35,131,226,.35)}
+.p-state.flat{background:var(--softbg);color:var(--ink2);border:1px solid var(--line2)}
+.p-state.mix{background:rgba(154,143,125,.14);color:var(--gold2,#8a6d3b);border:1px solid rgba(154,143,125,.4)}
+.p-role{font-size:11.5px;color:var(--ink3);margin-top:3px}
+.p-metrics{margin-top:10px;display:grid;gap:5px}
+.p-metrics>div{display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--ink2);border-top:1px solid var(--line);padding-top:5px}
+.p-metrics b{color:var(--ink);font-variant-numeric:tabular-nums;text-align:right}
+.p-note{font-size:11.8px;color:var(--ink2);line-height:1.65;margin-top:10px}
+.attr-table{width:100%;border-collapse:collapse;font-size:12.3px}
+.attr-table th{text-align:left;font-weight:600;color:var(--ink2);padding:7px 10px;border-bottom:1.5px solid var(--line2);white-space:nowrap}
+.attr-table td{padding:8px 10px;border-bottom:1px solid var(--line);color:var(--ink2);vertical-align:top;line-height:1.6}
+.attr-table td:first-child{white-space:nowrap;color:var(--ink)}
+.attr-table .aw{font-weight:600;color:var(--ink)}
 
 /* 研判 */
 .call-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
@@ -431,6 +454,28 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
     <div class="sb-t" id="call-sig-t">—</div>
     <div class="sb-b" id="call-sig-b">—</div>
+  </div>
+</section>
+
+<!-- ═══════════ ⑪ 市场参与者分析 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑪ 市场参与者结构与动量归因</h2><span class="tag">Participants &amp; Attribution</span></div>
+  <div class="sec-desc" data-desc="participants">—</div>
+
+  <div class="p-grid" id="p-cards"></div>
+
+  <h3 class="blk">参与者动量代理 vs 市场 <span class="hint">20日滚动 · 左轴=沪深300归一 · 右轴=超额/变动%</span></h3>
+  <div class="chart mid" id="ch-part"></div>
+
+  <h3 class="blk">外资外部条件 <span class="hint">美债10Y收益率(左,%) · 人民币20日变动(右,%,正=贬值)</span></h3>
+  <div class="chart mid" id="ch-ext" style="height:240px"></div>
+
+  <h3 class="blk">近一年趋势归因 <span class="hint">时期 → 主导参与者 → 证据链</span></h3>
+  <table class="attr-table" id="attr-table"></table>
+
+  <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
+    <div class="sb-t">🧭 参与者视角结论</div>
+    <div class="sb-b" id="p-concl-b">—</div>
   </div>
 </section>
 
