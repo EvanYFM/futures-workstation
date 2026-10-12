@@ -71,6 +71,13 @@ function renderAll(DATA) {
       <div class="cc-t">${c.t}</div><div class="cc-b">${c.b}</div><div class="cc-e">${c.e}</div></div>`).join('');
     $('call-sig-t').textContent = DATA.calls.sig.t;
     $('call-sig-b').innerHTML = DATA.calls.sig.b;
+    if (DATA.calls.participant_impact) {
+      $('call-part-t').textContent = DATA.calls.participant_impact.t;
+      $('call-part-b').innerHTML = DATA.calls.participant_impact.b;
+      document.getElementById('call-part-t').closest('.sig-box').style.display = '';
+    } else {
+      document.getElementById('call-part-t').closest('.sig-box').style.display = 'none';
+    }
   }
   $('broad-range').textContent = DATA.broad_range ? DATA.broad_range + ' · 起点=100' : '起点=100';
 

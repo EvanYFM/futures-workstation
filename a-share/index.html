@@ -351,9 +351,31 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="chart mid" id="ch-broad"></div>
 </section>
 
-<!-- ═══════════ ⑥ 中国五风格走势 ═══════════ -->
+<!-- ═══════════ ⑥ 市场参与者分析 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑥ 中国五风格走势</h2><span class="tag">CITICS Style Index · 金融/稳定/消费/周期/成长</span></div>
+  <div class="sec-head"><h2>⑥ 市场参与者结构与动量归因</h2><span class="tag">Participants &amp; Attribution</span></div>
+  <div class="sec-desc" data-desc="participants">—</div>
+
+  <div class="p-grid" id="p-cards"></div>
+
+  <h3 class="blk">参与者动量代理 vs 市场 <span class="hint">20日滚动 · 左轴=沪深300归一 · 右轴=超额/变动%</span></h3>
+  <div class="chart mid" id="ch-part"></div>
+
+  <h3 class="blk">外资外部条件 <span class="hint">美债10Y收益率(左,%) · 人民币20日变动(右,%,正=贬值)</span></h3>
+  <div class="chart mid" id="ch-ext" style="height:240px"></div>
+
+  <h3 class="blk">近一年趋势归因 <span class="hint">时期 → 主导参与者 → 证据链</span></h3>
+  <table class="attr-table" id="attr-table"></table>
+
+  <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
+    <div class="sb-t">🧭 参与者视角结论</div>
+    <div class="sb-b" id="p-concl-b">—</div>
+  </div>
+</section>
+
+<!-- ═══════════ ⑦ 中国五风格走势 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑦ 中国五风格走势</h2><span class="tag">CITICS Style Index · 金融/稳定/消费/周期/成长</span></div>
   <div class="sec-desc" data-desc="style5">采用<b>中信风格指数实际点位</b>（Tushare ci_daily，CI005917–CI005921，非 ETF 代理）。近 60 日<b>金融最强（+4.43%）、成长最弱（−22.73%）</b>；但近 5 日出现修复迹象——稳定与消费领涨，成长超跌反弹动能在积累。</div>
 
   <div class="cards c5" id="style-cards"></div>
@@ -384,9 +406,9 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="spread-grid" id="spreads"></div>
 </section>
 
-<!-- ═══════════ ⑦ 北向资金动向与趋势 ═══════════ -->
+<!-- ═══════════ ⑧ 北向资金动向与趋势 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑦ 北向资金动向与趋势</h2><span class="tag">Northbound Turnover</span></div>
+  <div class="sec-head"><h2>⑧ 北向资金动向与趋势</h2><span class="tag">Northbound Turnover</span></div>
   <div class="sec-desc" data-desc="north">2024-08 起北向不再披露逐日净买入，<b>成交规模与占比</b>成为观察外资参与度的核心口径。10月9日北向成交 <b>2967.35 亿元</b>，占两市总成交 <b>15.61%</b>，节后连续两日放量回升；成交倾向集中于<b>AI 硬件算力链（中际旭创、新易盛）与核心资产（宁德时代、药明康德）</b>。</div>
   <div class="cards c3">
     <div class="card">
@@ -407,16 +429,16 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="chart mid" id="ch-north"></div>
 </section>
 
-<!-- ═══════════ ⑧ 概念热度延续与切换 ═══════════ -->
+<!-- ═══════════ ⑨ 概念热度延续与切换 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑧ 概念热度：延续 or 切换</h2><span class="tag">Concept Momentum · 今日 vs 昨日 四象限</span></div>
+  <div class="sec-head"><h2>⑨ 概念热度：延续 or 切换</h2><span class="tag">Concept Momentum · 今日 vs 昨日 四象限</span></div>
   <div class="sec-desc" data-desc="concept">横轴 = 昨日涨跌、纵轴 = 今日涨跌，气泡大小 = 今日资金净额。<b>右上 = 延续强化</b>，<b>左上 = 逆势反转</b>，<b>右下 = 退潮</b>，<b>左下 = 持续走弱</b>。样本为今日涨跌幅 / 净额榜前列的 27 个热门概念（同花顺概念指数口径）。</div>
   <div class="chart mid" id="ch-concept"></div>
 </section>
 
-<!-- ═══════════ ⑨ 短线情绪与杠杆资金 ═══════════ -->
+<!-- ═══════════ ⑩ 短线情绪与杠杆资金 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑨ 短线情绪与杠杆资金</h2><span class="tag">Limit-Up Pool · Margin Trading · ETF</span></div>
+  <div class="sec-head"><h2>⑩ 短线情绪与杠杆资金</h2><span class="tag">Limit-Up Pool · Margin Trading · ETF</span></div>
   <div class="sec-desc" data-desc="emotion">涨停池为交易所口径（含连板数 / 封板时间 / 炸板统计）；两融余额沪市为 10-09、深市为 10-08（T+1 披露）；ETF 为股票 / 债券型成交榜（剔除货币型）。</div>
 
   <div class="cards c4" id="zt-cards"></div>
@@ -446,36 +468,19 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   </div>
 </section>
 
-<!-- ═══════════ ⑩ 行业配置研判 ═══════════ -->
+<!-- ═══════════ ⑪ 行业配置研判 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑩ 行业配置研判</h2><span class="tag">3 Calls · 结合五风格多周期表现</span></div>
+  <div class="sec-head"><h2>⑪ 行业配置研判</h2><span class="tag">3 Calls · 结合五风格多周期表现</span></div>
   <div class="sec-desc" data-desc="calls">基于当日资金流向、行业景气信号与五风格多周期表现给出的三条方向性研判。<b>仅供参考，不构成投资建议。</b></div>
   <div class="call-cards" id="call-cards"></div>
+
+  <div class="sig-box" style="margin-top:14px;border-left-color:var(--gold2,#8a6d3b)">
+    <div class="sb-t" id="call-part-t">—</div>
+    <div class="sb-b" id="call-part-b">—</div>
+  </div>
   <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
     <div class="sb-t" id="call-sig-t">—</div>
     <div class="sb-b" id="call-sig-b">—</div>
-  </div>
-</section>
-
-<!-- ═══════════ ⑪ 市场参与者分析 ═══════════ -->
-<section>
-  <div class="sec-head"><h2>⑪ 市场参与者结构与动量归因</h2><span class="tag">Participants &amp; Attribution</span></div>
-  <div class="sec-desc" data-desc="participants">—</div>
-
-  <div class="p-grid" id="p-cards"></div>
-
-  <h3 class="blk">参与者动量代理 vs 市场 <span class="hint">20日滚动 · 左轴=沪深300归一 · 右轴=超额/变动%</span></h3>
-  <div class="chart mid" id="ch-part"></div>
-
-  <h3 class="blk">外资外部条件 <span class="hint">美债10Y收益率(左,%) · 人民币20日变动(右,%,正=贬值)</span></h3>
-  <div class="chart mid" id="ch-ext" style="height:240px"></div>
-
-  <h3 class="blk">近一年趋势归因 <span class="hint">时期 → 主导参与者 → 证据链</span></h3>
-  <table class="attr-table" id="attr-table"></table>
-
-  <div class="sig-box" style="margin-top:14px;border-left-color:var(--accent)">
-    <div class="sb-t">🧭 参与者视角结论</div>
-    <div class="sb-b" id="p-concl-b">—</div>
   </div>
 </section>
 
