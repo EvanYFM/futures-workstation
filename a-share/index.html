@@ -3,6 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  (function () {
+    var theme = null;
+    try {
+      if (window.parent !== window && window.parent.document)
+        theme = window.parent.document.documentElement.getAttribute('data-theme');
+    } catch (e) { /* 跨域时忽略 */ }
+    if (theme !== 'dark' && theme !== 'light') {
+      try { theme = localStorage.getItem('ashare.theme'); } catch (e) {}
+    }
+    if (theme !== 'dark' && theme !== 'light')
+      theme = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', theme);
+  })();
+</script>
 <title>A股行业轮动与资金流向监控仪表盘</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,9 +29,19 @@
   --line:rgba(55,53,47,0.09); --line2:rgba(55,53,47,0.16);
   --up:#d44c47; --down:#0f7b6c; --accent:#2383e2;
   --upbg:rgba(212,76,71,0.08); --downbg:rgba(15,123,108,0.08);
+  --paper:#ffffff; --flat:#c9c8c4; --hover:rgba(55,53,47,0.4);
+  --tipbg:#37352f; --tiptext:#fff; --softbg:rgba(55,53,47,0.03);
+}
+html[data-theme="dark"]{
+  --ink:#e8e5da; --ink2:#b0ada3; --ink3:#8a877d;
+  --line:rgba(232,229,218,.10); --line2:rgba(232,229,218,.18);
+  --up:#e2726b; --down:#3fa795; --accent:#6cb2f5;
+  --upbg:rgba(226,114,107,.12); --downbg:rgba(63,167,149,.12);
+  --paper:#141412; --flat:#4a4a46; --hover:rgba(232,229,218,.45);
+  --tipbg:#23231f; --tiptext:#f0ede4; --softbg:rgba(232,229,218,.04);
 }
 *{box-sizing:border-box;margin:0;padding:0}
-body{background:transparent;color:var(--ink);
+body{background:var(--paper);color:var(--ink);
   font-family:'Inter','Noto Sans SC',-apple-system,sans-serif;
   font-size:14px;line-height:1.625;-webkit-font-smoothing:antialiased}
 .wrap{max-width:1080px;margin:0 auto;padding:48px 32px 80px}
@@ -63,7 +88,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .cards.c6{grid-template-columns:repeat(6,1fr)}
 @media(max-width:900px){.cards.c4,.cards.c5,.cards.c6{grid-template-columns:repeat(2,1fr)}.cards.c3{grid-template-columns:1fr}}
 .card{border:1px solid var(--line2);border-radius:6px;padding:14px 16px;background:transparent;transition:border-color .15s}
-.card:hover{border-color:rgba(55,53,47,0.4)}
+.card:hover{border-color:var(--hover)}
 .card .k{font-size:12px;color:var(--ink2);display:flex;justify-content:space-between;align-items:center}
 .card .v{font-size:22px;font-weight:600;margin-top:4px;letter-spacing:.2px}
 .card .s{font-size:12px;color:var(--ink3);margin-top:2px}
@@ -74,7 +99,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .breadth{margin-top:14px}
 .breadth-bar{display:flex;height:10px;border-radius:5px;overflow:hidden;margin:8px 0 6px}
 .breadth-bar .seg-up{background:var(--up);opacity:.75}
-.breadth-bar .seg-flat{background:#c9c8c4}
+.breadth-bar .seg-flat{background:var(--flat)}
 .breadth-bar .seg-down{background:var(--down);opacity:.75}
 .breadth-cap{display:flex;justify-content:space-between;font-size:12px;color:var(--ink2)}
 
@@ -95,10 +120,10 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .heat-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
 @media(max-width:900px){.heat-grid{grid-template-columns:repeat(4,1fr)}}
 .cell{border-radius:5px;padding:9px 6px;text-align:center;cursor:default;border:1px solid transparent;transition:transform .1s,border-color .1s}
-.cell:hover{transform:translateY(-1px);border-color:rgba(55,53,47,0.35)}
+.cell:hover{transform:translateY(-1px);border-color:var(--hover)}
 .cell .cn{font-size:12px;font-weight:500;display:block;white-space:nowrap}
 .cell .cp{font-size:12.5px;font-weight:600;display:block;margin-top:1px}
-#heat-tip{position:fixed;z-index:99;background:#37352f;color:#fff;border-radius:5px;padding:8px 12px;font-size:12px;line-height:1.6;pointer-events:none;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:240px}
+#heat-tip{position:fixed;z-index:99;background:var(--tipbg);color:var(--tiptext);border-radius:5px;padding:8px 12px;font-size:12px;line-height:1.6;pointer-events:none;display:none;box-shadow:0 4px 14px rgba(0,0,0,.25);max-width:240px}
 .legend{display:flex;gap:14px;align-items:center;font-size:12px;color:var(--ink2);margin:10px 0 14px;flex-wrap:wrap}
 .legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
 
@@ -108,7 +133,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .window-tabs{display:flex;gap:6px;margin:6px 0 10px}
 .wtab{border:1px solid var(--line2);background:transparent;border-radius:4px;padding:3px 14px;font-size:12.5px;color:var(--ink2);cursor:pointer;font-family:inherit}
 .wtab.on{background:var(--ink);color:#fff;border-color:var(--ink)}
-.sig-box{border:1px solid var(--line2);border-left:3px solid var(--ink);border-radius:6px;padding:14px 18px;margin-top:14px;background:rgba(55,53,47,0.025)}
+.sig-box{border:1px solid var(--line2);border-left:3px solid var(--ink);border-radius:6px;padding:14px 18px;margin-top:14px;background:var(--softbg)}
 .sig-box .sb-t{font-weight:600;font-size:13.5px}
 .sig-box .sb-b{color:var(--ink2);font-size:13px;margin-top:6px}
 .matrix{width:100%;border-collapse:collapse;margin-top:8px;font-size:12.5px}
@@ -116,7 +141,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .matrix th:first-child{text-align:left}
 .matrix td{padding:7px 10px;text-align:right;border-bottom:1px solid var(--line);font-variant-numeric:tabular-nums}
 .matrix td:first-child{text-align:left;font-weight:500}
-.matrix tr:hover td{background:rgba(55,53,47,0.03)}
+.matrix tr:hover td{background:var(--softbg)}
 .spread-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
 @media(max-width:900px){.spread-grid{grid-template-columns:1fr}}
 .spread-card{border:1px solid var(--line2);border-radius:6px;padding:11px 14px}
@@ -151,11 +176,11 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .datebar{display:flex;align-items:center;gap:16px;padding:10px 0 14px;margin-bottom:26px;border-bottom:1px solid var(--line);flex-wrap:wrap}
 .db-brand{width:30px;height:30px;display:grid;place-items:center;background:var(--ink);color:#fff;border-radius:7px;font-weight:600;font-size:15px}
 .db-nav{display:flex;align-items:center;gap:8px}
-.dbtn{border:1px solid var(--line2);background:#fff;border-radius:6px;padding:6px 13px;font-size:13px;color:var(--ink);cursor:pointer;font-family:inherit}
+.dbtn{border:1px solid var(--line2);background:var(--paper);border-radius:6px;padding:6px 13px;font-size:13px;color:var(--ink);cursor:pointer;font-family:inherit}
 .dbtn:hover:not(:disabled){border-color:var(--ink3)}
 .dbtn:disabled{opacity:.35;cursor:default}
 .dbtn-pri{background:var(--ink);color:#fff;border-color:var(--ink)}
-.dsel{border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:13.5px;font-family:inherit;color:var(--ink);background:#fff;font-variant-numeric:tabular-nums}
+.dsel{border:1px solid var(--line2);border-radius:6px;padding:6px 10px;font-size:13.5px;font-family:inherit;color:var(--ink);background:var(--paper);font-variant-numeric:tabular-nums}
 .dbstat{font-size:12px;color:var(--ink3);margin-left:auto}
 </style>
 </head>
@@ -168,6 +193,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
     <select id="date-sel" class="dsel"></select>
     <button class="dbtn" id="nav-next">后一日 ›</button>
     <button class="dbtn dbtn-pri" id="nav-latest">最新</button>
+    <button class="dbtn" id="themeBtn" title="日间/夜间切换" aria-label="日间/夜间切换">🌙 夜间</button>
   </div>
   <span class="dbstat" id="db-status">加载中…</span>
 </div>
@@ -260,7 +286,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="sec-desc" data-desc="heat">涨跌幅采用申万官方指数收盘口径；<b>悬停任意行业可查看当日主力资金净流入</b>（证券时报·数据宝口径，亿元）。</div>
   <div class="legend">
     <span><span class="sw" style="background:rgba(212,76,71,.75)"></span>上涨</span>
-    <span><span class="sw" style="background:#c9c8c4"></span>持平</span>
+    <span><span class="sw" style="background:var(--flat)"></span>持平</span>
     <span><span class="sw" style="background:rgba(15,123,108,.75)"></span>下跌</span>
     <span style="color:var(--ink3)">色深代表涨跌幅度</span>
   </div>

@@ -233,6 +233,7 @@
           <p>披露、保证金、行情与基本面来源分开标记</p>
         </div>
         <div id="statusPanel" class="status-panel"></div>
+        <div id="ashareStatusPanel" class="status-panel" style="margin-top:12px"></div>
       </section>
 
       <!-- A股每日仪表盘(独立子站iframe, 数据与期货完全解耦) -->
@@ -258,10 +259,41 @@
           if (!frame || !status) return;
           frame.addEventListener('load', function () {
             status.textContent = '子站已就绪 · 站内顶部可切换历史交易日';
+            pushTheme();
           });
           frame.addEventListener('error', function () {
             status.textContent = '子站加载失败，请点右侧新窗口打开';
           });
+          /* 主站日/夜切换时联动子站 */
+          function pushTheme() {
+            var t = document.documentElement.getAttribute('data-theme');
+            if (frame.contentWindow && (t === 'dark' || t === 'light'))
+              frame.contentWindow.postMessage({ type: 'ashare-theme', theme: t }, '*');
+          }
+          var themeBtn = document.getElementById('themeBtn');
+          if (themeBtn) themeBtn.addEventListener('click', function () { setTimeout(pushTheme, 80); });
+        })();
+        /* A股子站数据状态面板 */
+        (function () {
+          fetch('./a-share/data/dashboard-meta.json', { cache: 'no-store' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function (m) {
+              var el = document.getElementById('ashareStatusPanel');
+              if (!el) return;
+              var dates = m.dates || [];
+              var latest = String(dates[0] || '—').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+              el.innerHTML = '<section class="status-block"><h3>A股子站</h3><div class="status-list">'
+                + '<div class="status-line"><span>快照天数</span><strong>' + dates.length + ' 个交易日</strong></div>'
+                + '<div class="status-line"><span>最新快照</span><strong>' + latest + '</strong></div>'
+                + '<div class="status-line"><span>索引更新</span><strong>' + (m.generatedAt || '—') + '</strong></div>'
+                + '<div class="status-line"><span>数据管道</span><strong>交易日 17:00 自动采集入库</strong></div>'
+                + '<div class="status-line"><span>子站视图</span><strong><a href="#" onclick="document.querySelector(\'button[data-view=ashare]\').click();return false;">切到 A股仪表盘 →</a></strong></div>'
+                + '</div></section>';
+            })
+            .catch(function () {
+              var el = document.getElementById('ashareStatusPanel');
+              if (el) el.innerHTML = '<section class="status-block"><h3>A股子站</h3><div class="status-list"><div class="status-line"><span>状态</span><strong>meta 加载失败</strong></div></div></section>';
+            });
         })();
       </script>
 

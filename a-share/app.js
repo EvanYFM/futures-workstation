@@ -5,11 +5,47 @@ const sgn = x => x > 0 ? '+' : '';
 const cls = x => x > 0 ? 'up' : (x < 0 ? 'down' : 'flat');
 const $ = id => document.getElementById(id);
 
+/* ── 日/夜主题: 动态调色板 ── */
+const TH = () => document.documentElement.dataset.theme === 'dark' ? {
+  ink:'#e8e5da', text:'#b0ada3', sub:'#8a877d',
+  up:'#e2726b', down:'#3fa795', accent:'#6cb2f5', gold:'#b3a78f',
+  line:'rgba(232,229,218,.18)', split:'rgba(232,229,218,.08)', split2:'rgba(232,229,218,.06)',
+  mark:'rgba(232,229,218,.28)', bubble:'#141412',
+  tipbg:'#23231f', tiptext:'#f0ede4',
+  upA:'rgba(226,114,107,.68)', downA:'rgba(63,167,149,.68)', goldA:'rgba(179,167,143,.18)'
+} : {
+  ink:'#37352f', text:TH().text, sub:TH().sub,
+  up:TH().up, down:TH().down, accent:TH().accent, gold:TH().gold,
+  line:'rgba(55,53,47,0.16)', split:'rgba(55,53,47,0.07)', split2:TH().split2,
+  mark:TH().mark, bubble:'#fff',
+  tipbg:'#37352f', tiptext:'#fff',
+  upA:TH().upA, downA:TH().downA, goldA:TH().goldA
+};
+let AX, TIP;
+function refreshPalette() {
+  const t = TH();
+  AX = { axisLine: {lineStyle:{color:t.line}}, axisTick:{show:false},
+    axisLabel:{color:t.text,fontSize:11}, splitLine:{lineStyle:{color:t.split}} };
+  TIP = { backgroundColor:t.tipbg, borderWidth:0, textStyle:{color:t.tiptext,fontSize:12},
+    confine:true, extraCssText:'box-shadow:0 4px 14px rgba(0,0,0,.25);border-radius:5px;' };
+}
+let LAST = null;
+function applyTheme(theme, persist) {
+  document.documentElement.setAttribute('data-theme', theme);
+  const btn = $('themeBtn');
+  if (btn) { btn.textContent = theme === 'dark' ? '☀️ 日间' : '🌙 夜间'; }
+  if (persist) { try { localStorage.setItem('ashare.theme', theme); } catch (e) {} }
+  refreshPalette();
+  if (LAST) renderAll(LAST);
+}
+
 let charts = [];
 let styleChart = null;
 addEventListener('resize', () => charts.forEach(c => c.resize()));
 
 function renderAll(DATA) {
+  LAST = DATA;
+  refreshPalette();
   charts.forEach(c => c.dispose());
   charts = [];
   styleChart = null;
@@ -87,10 +123,7 @@ DATA.industries.forEach(ind => {
 });
 
 /* ── ECharts 公共配置 ── */
-const AX = { axisLine: {lineStyle:{color:'rgba(55,53,47,0.16)'}}, axisTick:{show:false},
-  axisLabel:{color:'#787774',fontSize:11}, splitLine:{lineStyle:{color:'rgba(55,53,47,0.07)'}} };
-const TIP = { backgroundColor:'#37352f', borderWidth:0, textStyle:{color:'#fff',fontSize:12},
-  extraCssText:'border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;' };
+refreshPalette();
 const mk = (id, opt) => { const c = echarts.init($(id), null, {renderer:'canvas'}); c.setOption(opt); charts.push(c); return c; };
 
 /* ── ① 近5日主力净流入柱图 ── */
@@ -100,7 +133,7 @@ mk('ch-main5d', {
   xAxis:{type:'category',data:DATA.fund_flow.days.map(d=>d.date),...AX},
   yAxis:{type:'value',...AX},
   series:[{type:'bar',barWidth:22,
-    data:DATA.fund_flow.days.map(d=>({value:d.main, itemStyle:{color:d.main>=0?'#d44c47':'#0f7b6c',opacity:.8}}))}]
+    data:DATA.fund_flow.days.map(d=>({value:d.main, itemStyle:{color:d.main>=0?TH().up:TH().down,opacity:.8}}))}]
 });
 
 /* ── ③ 行业资金双向条形 ── */
@@ -111,10 +144,10 @@ mk('ch-indflow', {
   xAxis:{type:'value',...AX},
   yAxis:{type:'category',data:inds.map(i=>i.name),...AX,axisLabel:{color:'#37352f',fontSize:11.5}},
   series:[{type:'bar',barWidth:13,
-    data:inds.map(i=>({value:i.flow, itemStyle:{color:i.flow>=0?'#d44c47':'#0f7b6c',opacity:.82},
-      label:{show:Math.abs(i.flow)>20,position:i.flow>=0?'right':'left',color:'#787774',fontSize:10,
+    data:inds.map(i=>({value:i.flow, itemStyle:{color:i.flow>=0?TH().up:TH().down,opacity:.82},
+      label:{show:Math.abs(i.flow)>20,position:i.flow>=0?'right':'left',color:TH().text,fontSize:10,
         formatter:()=>`${sgn(i.flow)}${fmt(i.flow,1)}`}}))}],
-  graphic:[{type:'text',right:60,top:4,style:{text:'单位：亿元',fill:'#9b9a97',fontSize:11}}]
+  graphic:[{type:'text',right:60,top:4,style:{text:'单位：亿元',fill:TH().sub,fontSize:11}}]
 });
 
 /* ── ④ 宽基卡+走势 ── */
@@ -127,12 +160,12 @@ $('broad-cards').innerHTML = DATA.broad_styles.map(b => `
       60D <b class="${cls(b.r60)} num">${sgn(b.r60)}${fmt(b.r60)}%</b> · 1Y <b class="${cls(b.r250)} num">${sgn(b.r250)}${fmt(b.r250)}%</b>
     </div>
   </div>`).join('');
-const BCOLORS = {'上证50':'#37352f','沪深300':'#9b9a97','中证500':'#c9c8c4','中证1000':'#d44c47','国证成长':'#e8913d','国证价值':'#0f7b6c'};
+const BCOLORS = {'上证50':'#37352f','沪深300':TH().sub,'中证500':'#c9c8c4','中证1000':TH().up,'国证成长':'#e8913d','国证价值':TH().down};
 mk('ch-broad', {
   grid:{left:40,right:16,top:30,bottom:46},
   tooltip:{...TIP, trigger:'axis', formatter: ps => ps.map(p=>`${p.marker}${p.seriesName} <b>${fmt(p.value[1],1)}</b>`).join('<br>')},
-  legend:{top:0,textStyle:{color:'#787774',fontSize:11},itemWidth:16,itemHeight:2},
-  xAxis:{type:'time',...AX,axisLabel:{color:'#9b9a97',fontSize:10,formatter:v=>echarts.time.format(v,'{MM}/{yy}',false)}},
+  legend:{top:0,textStyle:{color:TH().text,fontSize:11},itemWidth:16,itemHeight:2},
+  xAxis:{type:'time',...AX,axisLabel:{color:TH().sub,fontSize:10,formatter:v=>echarts.time.format(v,'{MM}/{yy}',false)}},
   yAxis:{type:'value',...AX,scale:true},
   series: DATA.broad_styles.filter(b=>['上证50','中证1000','国证成长','国证价值'].includes(b.name))
     .map(b=>({name:b.name,type:'line',showSymbol:false,lineStyle:{width:b.name==='国证价值'||b.name==='中证1000'?2.2:1.4},
@@ -140,7 +173,7 @@ mk('ch-broad', {
 });
 
 /* ── ⑤ 五风格卡 ── */
-const SCOLORS = {'金融':'#b8860b','稳定':'#0f7b6c','消费':'#c86b85','周期':'#8a7f6d','成长':'#2383e2'};
+const SCOLORS = {'金融':'#b8860b','稳定':TH().down,'消费':'#c86b85','周期':'#8a7f6d','成长':TH().accent};
 $('style-cards').innerHTML = DATA.citics_styles.map(s => `
   <div class="card">
     <div class="k"><span>${s.name}</span><span style="color:${SCOLORS[s.name]};font-size:11px">${s.code}</span></div>
@@ -173,8 +206,8 @@ function renderStyle(w) {
     grid:{left:40,right:16,top:30,bottom:46},
     tooltip:{...TIP, trigger:'axis', formatter: ps => ps[0].value[0].slice(0,10).replace(/-/g,'/') + '<br>' +
       ps.map(p=>`${p.marker}${p.seriesName} <b>${fmt(p.value[1],1)}</b>`).join('<br>')},
-    legend:{top:0,textStyle:{color:'#787774',fontSize:11},itemWidth:16,itemHeight:2},
-    xAxis:{type:'time',...AX,axisLabel:{color:'#9b9a97',fontSize:10,formatter:v=>echarts.time.format(v,'{MM}/{yy}',false)}},
+    legend:{top:0,textStyle:{color:TH().text,fontSize:11},itemWidth:16,itemHeight:2},
+    xAxis:{type:'time',...AX,axisLabel:{color:TH().sub,fontSize:10,formatter:v=>echarts.time.format(v,'{MM}/{yy}',false)}},
     yAxis:{type:'value',...AX,scale:true},
     series };
   if (!styleChart) styleChart = mk('ch-style', opt);
@@ -248,15 +281,15 @@ const NB = DATA.northbound;
 mk('ch-north', {
   grid:{left:52,right:52,top:26,bottom:26},
   tooltip:{...TIP, trigger:'axis', formatter: ps => `${ps[0].name}<br>` + ps.map(p=>`${p.marker}${p.seriesName} <b>${p.seriesName==='占比'?fmt(p.value)+'%':fmt(p.value)+' 亿'}</b>`).join('<br>')},
-  legend:{top:0,textStyle:{color:'#787774',fontSize:11},itemWidth:16,itemHeight:2},
+  legend:{top:0,textStyle:{color:TH().text,fontSize:11},itemWidth:16,itemHeight:2},
   xAxis:{type:'category',data:NB.days.map(d=>d.date),...AX},
-  yAxis:[{type:'value',name:'亿元',nameTextStyle:{color:'#9b9a97'},...AX},
-         {type:'value',name:'占比%',nameTextStyle:{color:'#9b9a97'},...AX,splitLine:{show:false},min:12,max:18}],
+  yAxis:[{type:'value',name:'亿元',nameTextStyle:{color:TH().sub},...AX},
+         {type:'value',name:'占比%',nameTextStyle:{color:TH().sub},...AX,splitLine:{show:false},min:12,max:18}],
   series:[
     {name:'北向成交额',type:'bar',barWidth:30,data:NB.days.map(d=>d.amt),
-     itemStyle:{color:'#9a8f7d',opacity:.75}},
+     itemStyle:{color:TH().gold,opacity:.75}},
     {name:'占比',type:'line',yAxisIndex:1,data:NB.days.map(d=>d.ratio),
-     lineStyle:{width:2,color:'#2383e2'},itemStyle:{color:'#2383e2'},symbolSize:6}
+     lineStyle:{width:2,color:TH().accent},itemStyle:{color:TH().accent},symbolSize:6}
   ]
 });
 
@@ -278,14 +311,14 @@ mk('ch-turnover', {
   grid:{left:46,right:14,top:14,bottom:20},
   tooltip:{...TIP, trigger:'axis', formatter: ps => ps.map(p => `${p.name}<br>${p.seriesName} <b>${p.value.toLocaleString()}</b> 亿`).join('<br>')},
   xAxis:{type:'category',data:TP.hist.map(h=>h[0]),...AX,axisLabel:{...AX.axisLabel,interval:48}},
-  yAxis:{type:'value',name:'亿元',nameTextStyle:{color:'#9b9a97'},...AX},
+  yAxis:{type:'value',name:'亿元',nameTextStyle:{color:TH().sub},...AX},
   series:[
     {name:'成交额',type:'line',data:TP.hist.map(h=>h[1]),showSymbol:false,
-     lineStyle:{width:1.2,color:'#9a8f7d'},areaStyle:{color:'rgba(154,143,125,0.14)'}},
+     lineStyle:{width:1.2,color:TH().gold},areaStyle:{color:TH().goldA}},
     {name:'中位数',type:'line',data:TP.hist.map(()=>TP.median),showSymbol:false,
-     lineStyle:{width:1,color:'#9b9a97',type:'dashed'},tooltip:{show:false}},
+     lineStyle:{width:1,color:TH().sub,type:'dashed'},tooltip:{show:false}},
     {name:'今日',type:'scatter',data:[[TP.hist.length-1, TP.today]],symbolSize:7,
-     itemStyle:{color:'#d44c47'},tooltip:{formatter:() => `10/09 成交额 <b>${TP.today.toLocaleString()}</b> 亿（${TP.percentile}% 分位）`}}
+     itemStyle:{color:TH().up},tooltip:{formatter:() => `10/09 成交额 <b>${TP.today.toLocaleString()}</b> 亿（${TP.percentile}% 分位）`}}
   ]
 });
 
@@ -309,7 +342,7 @@ mk('ch-sw5d', {
     if (st) s += `<br>THS资金连续性: 今日${st.d1>0?'+':''}${st.d1} / 3日${st.d3>0?'+':''}${st.d3} / 5日${st.d5>0?'+':''}${st.d5} 亿`;
     return s;
   }},
-  xAxis:{type:'category',data:H5.dates,...AX,position:'top',axisLabel:{color:'#787774',fontSize:11.5}},
+  xAxis:{type:'category',data:H5.dates,...AX,position:'top',axisLabel:{color:TH().text,fontSize:11.5}},
   yAxis:{type:'category',data:H5.rows.map(r => {
     const st = streakMap[SW2THS[r.name]];
     const dots = st && st.streak !== 0 ? ` ${st.streak > 0 ? '●'.repeat(Math.abs(st.streak)) : '○'.repeat(Math.abs(st.streak))}` : '';
@@ -318,11 +351,11 @@ mk('ch-sw5d', {
     axisLabel:{color:'#37352f',fontSize:11.5,margin:8,
       formatter: v => v, rich:{}}},
   visualMap:{min:-3,max:3,calculable:false,orient:'vertical',right:0,top:'center',itemHeight:90,
-    inRange:{color:['#0f7b6c','#6fa79e','#e9e8e4','#d99692','#d44c47']},
-    textStyle:{color:'#9b9a97',fontSize:10}},
+    inRange:{color:[TH().down,'#6fa79e','#e9e8e4','#d99692',TH().up]},
+    textStyle:{color:TH().sub,fontSize:10}},
   series:[{type:'heatmap',data:hmData,label:{show:true,fontSize:10,color:'#37352f',
     formatter: p => (p.data[2] > 0 ? '+' : '') + p.data[2].toFixed(1)},
-    itemStyle:{borderColor:'#fff',borderWidth:1.5},emphasis:{itemStyle:{shadowBlur:4,shadowColor:'rgba(0,0,0,.2)'}}}]
+    itemStyle:{borderColor:TH().bubble,borderWidth:1.5},emphasis:{itemStyle:{shadowBlur:4,shadowColor:'rgba(0,0,0,.2)'}}}]
 });
 // 右侧 5日累计 标签(rich text 不支持 per-item 颜色,改为图表标题下加说明 + tooltip)
 // 连续性圆点已在 y 轴标签: ●=连续净流入, ○=连续净流出
@@ -345,16 +378,16 @@ mk('ch-concept', {
     const d = p.data[2];
     return `<b>${d.name}</b><br>今日 <b>${sgn(d.today)}${fmt(d.today)}%</b> · 昨日 ${sgn(d.yest)}${fmt(d.yest)}%<br>5日累计 ${sgn(d.d5)}${fmt(d.d5)}% · 今日净额 ${d.flow != null ? sgn(d.flow) + fmt(d.flow,1) + ' 亿' : '—'}`;
   }},
-  xAxis:{type:'value',name:'昨日涨跌 %',nameLocation:'middle',nameGap:24,nameTextStyle:{color:'#787774'},...AX,splitLine:{show:true,lineStyle:{color:'rgba(55,53,47,0.06)'}}},
+  xAxis:{type:'value',name:'昨日涨跌 %',nameLocation:'middle',nameGap:24,nameTextStyle:{color:TH().text},...AX,splitLine:{show:true,lineStyle:{color:TH().split2}}},
   yAxis:{type:'value',name:'今日涨跌 %',...AX},
   series:[{type:'scatter',
     data:CM.map(c => ({value:[c.yest, c.today, c], name:c.name,
       symbolSize:conceptSize(c.flow || 2),
-      itemStyle:{color: c.today >= 0 ? 'rgba(212,76,71,0.68)' : 'rgba(15,123,108,0.68)', borderColor:'#fff',borderWidth:1}})),
+      itemStyle:{color: c.today >= 0 ? TH().upA : TH().downA, borderColor:TH().bubble,borderWidth:1}})),
     label:{show:true,position:'top',fontSize:10.5,color:'#5f5e5b',
       formatter:p => showNames.has(p.data.name) ? p.data.name : '',
       labelLayout:{hideOverlap:true, moveOverlap:'shiftY'}},
-    markLine:{symbol:'none',silent:true,lineStyle:{color:'rgba(55,53,47,0.22)',type:'dashed'},
+    markLine:{symbol:'none',silent:true,lineStyle:{color:TH().mark,type:'dashed'},
       label:{show:false},data:[{xAxis:0},{yAxis:0}]},
     markArea:{silent:true,itemStyle:{color:'rgba(0,0,0,0)'},
       label:{show:true,position:'inside',color:'#c4c3bf',fontSize:11,fontWeight:500},
@@ -393,12 +426,12 @@ const MG = DATA.margin;
 mk('ch-margin', {
   grid:{left:52,right:14,top:14,bottom:22},
   tooltip:{...TIP, trigger:'axis', formatter: ps => ps.map(p => `${p.seriesName} <b>${p.value.toLocaleString()}</b> 亿`).join('<br>')},
-  legend:{top:0,textStyle:{color:'#787774',fontSize:11},itemWidth:14,itemHeight:8},
+  legend:{top:0,textStyle:{color:TH().text,fontSize:11},itemWidth:14,itemHeight:8},
   xAxis:{type:'category',data:MG.series.map(s=>s.date),...AX},
   yAxis:{type:'value',...AX,min:v=>Math.floor(v.min*0.98)},
   series:[
     {name:'沪市',type:'bar',stack:'m',barWidth:26,data:MG.series.map(s=>s.sse),itemStyle:{color:'#c8b89a',opacity:.85}},
-    {name:'深市',type:'bar',stack:'m',data:MG.series.map(s=>s.szse),itemStyle:{color:'#9a8f7d',opacity:.85}},
+    {name:'深市',type:'bar',stack:'m',data:MG.series.map(s=>s.szse),itemStyle:{color:TH().gold,opacity:.85}},
     {name:'合计',type:'line',data:MG.series.map(s=>s.total),lineStyle:{width:2,color:'#37352f'},itemStyle:{color:'#37352f'},symbolSize:5}
   ]
 });
@@ -436,6 +469,21 @@ async function loadDate(d, push = true) {
     $('db-status').textContent = '加载失败：' + e.message + '（若以 file:// 打开请改用本地服务器或 GitHub Pages）';
   }
 }
+
+/* ── 主题控制 ── */
+(function initTheme() {
+  const cur = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
+  const btn = $('themeBtn');
+  if (btn) btn.textContent = cur === 'dark' ? '☀️ 日间' : '🌙 夜间';
+  btn.addEventListener('click', () => {
+    applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+  });
+  /* 嵌入工作站时跟随父站主题切换 */
+  window.addEventListener('message', (e) => {
+    if (e.data && e.data.type === 'ashare-theme' && (e.data.theme === 'dark' || e.data.theme === 'light'))
+      applyTheme(e.data.theme, false);
+  });
+})();
 
 (async function boot() {
   try {
