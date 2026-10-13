@@ -340,8 +340,12 @@ $('spreads').innerHTML = spreads.map(x => `
   </div>`).join('');
 
 /* ── ⑥ 北向 ── */
-$('nb-sh').innerHTML = DATA.northbound.top_sh.map((x,i)=>`${i+1}. <b>${x[0]}</b> <span class="num" style="color:var(--ink2)">${fmt(x[1])} 亿</span>`).join('<br>');
-$('nb-sz').innerHTML = DATA.northbound.top_sz.map((x,i)=>`${i+1}. <b>${x[0]}</b> <span class="num" style="color:var(--ink2)">${fmt(x[1])} 亿</span>`).join('<br>');
+$('nb-sh').innerHTML = (DATA.northbound.top_sh || []).length
+  ? DATA.northbound.top_sh.map((x,i)=>`${i+1}. <b>${x[0]}</b> <span class="num" style="color:var(--ink2)">${fmt(x[1])} 亿</span>`).join('<br>')
+  : '<span style="color:var(--ink3)">当日成交前三盘后未披露</span>';
+$('nb-sz').innerHTML = (DATA.northbound.top_sz || []).length
+  ? DATA.northbound.top_sz.map((x,i)=>`${i+1}. <b>${x[0]}</b> <span class="num" style="color:var(--ink2)">${fmt(x[1])} 亿</span>`).join('<br>')
+  : '<span style="color:var(--ink3)">当日成交前三盘后未披露</span>';
 const NB = DATA.northbound;
 mk('ch-north', {
   grid:{left:52,right:52,top:26,bottom:26},
