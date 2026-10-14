@@ -31,6 +31,7 @@ const state = {
   ctaSector: "all",
   ctaDirection: "all",
   activeCtaSymbol: null,
+  focusTechnicalSymbol: null,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -1123,6 +1124,11 @@ function renderCta() {
   const selected = rows.find((row) => row.symbol === state.activeCtaSymbol) || rows[0];
   state.activeCtaSymbol = selected?.symbol || null;
   $("#ctaDetail").innerHTML = selected ? `<div class="detail-kicker">CTA FACTOR BREAKDOWN</div><h3>${escapeHtml(selected.variety)} <small>${escapeHtml(selected.symbol)}</small></h3><div class="cta-detail-score ${signClass(selected.score)}">${formatSigned(selected.score)} <small>${escapeHtml(selected.signal)}</small></div><p>${escapeHtml(selected.sector)} · 可用因子覆盖 ${selected.coverage}% · 年化波动 ${selected.volatility ?? "—"}%</p><div class="cta-factor-list">${Object.entries(CTA_FACTOR_LABELS).map(([key, label]) => `<article><div><strong>${label}</strong><span class="${selected.factors[key] == null ? "neutral-text" : signClass(selected.factors[key])}">${selected.factors[key] == null ? "未覆盖" : formatSigned(selected.factors[key])}</span></div><p>${escapeHtml(selected.evidence[key])}</p></article>`).join("")}</div>${renderMetal4d(selected)}<div class="detail-source-notice">缺失因子不按中性计分，而是按可用权重重算。截图是二级证据；评分不是回测后的交易策略或买卖建议。</div>` : `<div class="detail-empty">该筛选条件没有 CTA 品种。</div>`;
+  const focusSymbol = selected?.symbol;
+  const focusPanel = $("#ctaFocusTechnical");
+  if (focusPanel) focusPanel.innerHTML = window.FocusTechnical?.ALLOWED_SYMBOLS?.has(focusSymbol)
+    ? window.FocusTechnical.renderTechnicalObservation(window.FOCUS_TECHNICAL_DATA, currentSnapshot(), state.date, focusSymbol)
+    : "";
 }
 
 function renderAll() {
@@ -1168,6 +1174,7 @@ function setDate(date) {
   state.detailQuery = "";
   state.decisionPage = 1;
   state.activeCtaSymbol = null;
+  state.focusTechnicalSymbol = null;
   if (state.data.snapshots[date]) { renderAll(); return; }
   /* 该日快照可能还在后台补载队列里：按需拉取后再渲染，期间复用全屏装载提示 */
   const loadingEl = document.getElementById("loadingState");
@@ -1199,7 +1206,9 @@ function bindEvents() {
     const row = event.target.closest("[data-symbol]");
     if (row) { state.activeSymbol = row.dataset.symbol; renderInstrumentTable(); }
     const ctaRow = event.target.closest("[data-cta-symbol]");
-    if (ctaRow) { state.activeCtaSymbol = ctaRow.dataset.ctaSymbol; renderCta(); }
+    if (ctaRow) { state.activeCtaSymbol = ctaRow.dataset.ctaSymbol; state.focusTechnicalSymbol = window.FocusTechnical?.ALLOWED_SYMBOLS?.has(state.activeCtaSymbol) ? state.activeCtaSymbol : null; renderCta(); }
+    const ctaFocus = event.target.closest("[data-cta-focus-symbol]");
+    if (ctaFocus) { state.ctaQuery = ""; state.ctaSector = "all"; state.ctaDirection = "all"; state.activeCtaSymbol = ctaFocus.dataset.ctaFocusSymbol; state.focusTechnicalSymbol = state.activeCtaSymbol; $("#ctaSearchInput").value = ""; $("#ctaDirectionFilter").value = "all"; renderCta(); }
     const detailName = event.target.closest("[data-open-detail-symbol]");
     if (detailName) { state.activeSymbol = detailName.dataset.openDetailSymbol; switchView("detail"); window.scrollTo({top: 0, behavior: motionBehavior()}); }
     const focus = event.target.closest("[data-open-symbol]");

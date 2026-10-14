@@ -710,7 +710,7 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .cta-table td small { color: var(--gray); font: 500 9px/1.4 var(--sans);
   font-variant-numeric: tabular-nums; }
 .cta-score { font-size: 16px !important; font-weight: 600; font-variant-numeric: tabular-nums; font-family: var(--serif); }
-.cta-detail { min-height: 0; }
+.cta-detail { min-height: 0; max-height: calc(100dvh - 88px); overflow-y: auto; overscroll-behavior: contain; }
 .cta-detail h3 { margin: 4px 0 0; font: 600 22px/1.3 var(--serif); letter-spacing: .04em; }
 .cta-detail h3 small { color: var(--gray); font: 500 11px/1 var(--sans);
   font-variant-numeric: tabular-nums; }
@@ -724,6 +724,19 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .cta-metal4d-head { display: flex; justify-content: space-between; gap: 12px; align-items: center; }
 .cta-metal4d-head small, .cta-metal4d > p { color: var(--gray); font-size: 9px; }
 .cta-metal4d h4 { margin: 2px 0 0; font: 600 14px/1.4 var(--serif); }
+.cta-quick-focus { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--gray); }
+.cta-quick-focus button { padding: 4px 7px; border: 1px solid var(--line); background: var(--paper); color: var(--ink); font: 600 10px/1 var(--sans); }
+.cta-quick-focus button:hover, .cta-quick-focus button:focus-visible { border-color: var(--cinnabar); color: var(--cinnabar); outline: none; }
+.focus-technical { margin-top: 14px; padding-top: 12px; border-top: 2px solid var(--ink); }
+.focus-technical-head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.focus-technical h4 { margin: 2px 0 0; font: 600 15px/1.4 var(--serif); }
+.focus-technical-head small, .focus-technical p, .focus-technical li { color: var(--ink); font-size: 12px; line-height: 1.7; }
+.focus-technical-score { font: 600 20px/1 var(--serif); font-variant-numeric: tabular-nums; }
+.focus-technical-chart { width: 100%; height: 126px; margin: 8px 0; border: 1px solid var(--line); background: var(--paper-soft); }
+.focus-technical ul { margin: 8px 0; padding-left: 18px; }
+.focus-technical details { border-top: 1px solid var(--line); padding-top: 8px; font-size: 10px; }
+.focus-technical summary { cursor: pointer; color: var(--ink); }
+.focus-technical details p { margin: 6px 0 0; }
 
 /* ================= 品种历史操作回看 ================= */
 .history-summary { margin-bottom: 20px; }
@@ -996,6 +1009,7 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .event-timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .decision-layout { grid-template-columns: 220px minmax(0, 1fr); }
   .cta-layout { grid-template-columns: minmax(0, 1fr); }
+  .cta-detail { max-height: none; overflow: visible; }
   .history-panel { grid-template-columns: minmax(0, 1fr); }
 }
 @media (max-width: 860px) {
