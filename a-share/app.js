@@ -433,41 +433,7 @@ const rowHTML = c => `<div class="row"><span class="nm">${c.name}</span><span cl
 $('ths-in').innerHTML = DATA.ths_cont.filter(c => c.streak >= 2).sort((a,b)=>b.d3-a.d3).slice(0,8).map(rowHTML).join('');
 $('ths-out').innerHTML = DATA.ths_cont.filter(c => c.streak <= -2).sort((a,b)=>a.d3-b.d3).slice(0,8).map(rowHTML).join('');
 
-/* ── ⑧ 概念四象限 ── */
-const CM = DATA.concept_matrix;
-const conceptSize = v => Math.max(8, Math.min(30, 8 + Math.abs(v) * 0.9));
-// 仅标注重点概念: 今日涨幅前10 或 净额绝对值前6, 其余悬停查看
-const showNames = new Set([
-  ...[...CM].sort((a,b)=>b.today-a.today).slice(0,10).map(c=>c.name),
-  ...[...CM].sort((a,b)=>Math.abs(b.flow||0)-Math.abs(a.flow||0)).slice(0,6).map(c=>c.name)
-]);
-mk('ch-concept', {
-  grid:{left:50,right:20,top:30,bottom:40},
-  tooltip:{...TIP, formatter: p => {
-    const d = p.data[2];
-    return `<b>${d.name}</b><br>今日 <b>${sgn(d.today)}${fmt(d.today)}%</b> · 昨日 ${sgn(d.yest)}${fmt(d.yest)}%<br>5日累计 ${sgn(d.d5)}${fmt(d.d5)}% · 今日净额 ${d.flow != null ? sgn(d.flow) + fmt(d.flow,1) + ' 亿' : '—'}`;
-  }},
-  xAxis:{type:'value',name:'昨日涨跌 %',nameLocation:'middle',nameGap:24,nameTextStyle:{color:TH().text},...AX,splitLine:{show:true,lineStyle:{color:TH().split2}}},
-  yAxis:{type:'value',name:'今日涨跌 %',...AX},
-  series:[{type:'scatter',
-    data:CM.map(c => ({value:[c.yest, c.today, c], name:c.name,
-      symbolSize:conceptSize(c.flow || 2),
-      itemStyle:{color: c.today >= 0 ? TH().upA : TH().downA, borderColor:TH().bubble,borderWidth:1}})),
-    label:{show:true,position:'top',fontSize:10.5,color:TH().clab,
-      formatter:p => showNames.has(p.data.name) ? p.data.name : '',
-      labelLayout:{hideOverlap:true, moveOverlap:'shiftY'}},
-    markLine:{symbol:'none',silent:true,lineStyle:{color:TH().mark,type:'dashed'},
-      label:{show:false},data:[{xAxis:0},{yAxis:0}]},
-    markArea:{silent:true,itemStyle:{color:'rgba(0,0,0,0)'},
-      label:{show:true,position:'inside',color:TH().quad,fontSize:11,fontWeight:500},
-      data:[[{name:'↗ 延续强化',xAxis:0,yAxis:0},{xAxis:'max',yAxis:'max'}],
-            [{name:'逆势反转 ↖',xAxis:'min',yAxis:0},{xAxis:0,yAxis:'max'}],
-            [{name:'退潮 ↘',xAxis:0,yAxis:'min'},{xAxis:'max',yAxis:0}],
-            [{name:'持续走弱 ↙',xAxis:'min',yAxis:'min'},{xAxis:0,yAxis:0}]]}
-  }]
-});
-
-/* ── ⑨ 涨停池 / 两融 / ETF ── */
+/* ── ⑧ 涨停池 / 两融 / ETF ── */
 const LP = DATA.limit_pool;
 const zc = (n, sub) => `<div class="card"><div class="k"><span>${sub}</span></div><div class="v num">${n}</div></div>`;
 $('zt-cards').innerHTML =
