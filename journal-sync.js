@@ -22,7 +22,14 @@ var JournalSync = (function () {
   function b64e(s) { return btoa(unescape(encodeURIComponent(s))); }
   function b64d(s) { return decodeURIComponent(escape(atob(s.replace(/\n/g, "")))); }
 
+  /* api.github.com 国内时通时断，挂起的 fetch 曾把整站首屏拖死几十秒。
+     15s 超时兜底：超时 abort 并抛出可读错误，由上层状态栏提示重试。 */
+  var API_TIMEOUT_MS = 15000;
+
   function api(method, path, body) {
+    var controller = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    var timer = controller ? setTimeout(function () { controller.abort(); }, API_TIMEOUT_MS) : null;
+    var clearTimer = function () { if (timer) { clearTimeout(timer); timer = null; } };
     return fetch("https://api.github.com/repos/" + OWNER + "/" + REPO + "/contents/" + path, {
       method: method,
       headers: {
@@ -31,15 +38,23 @@ var JournalSync = (function () {
         "Content-Type": "application/json",
         "X-GitHub-Api-Version": "2022-11-28"
       },
-      body: body ? JSON.stringify(body) : undefined
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller ? controller.signal : undefined
     }).then(function (r) {
-      if (r.status === 404 && method === "GET") return null;                 /* 文件尚不存在 */
-      if (r.status === 401) throw new Error("Token 无效或已过期");
-      if (!r.ok) throw new Error("GitHub " + r.status);
+      if (r.status === 404 && method === "GET") { clearTimer(); return null; }  /* 文件尚不存在 */
+      if (r.status === 401) { clearTimer(); throw new Error("Token 无效或已过期"); }
+      if (!r.ok) { clearTimer(); throw new Error("GitHub " + r.status); }
       return r.json().then(function (j) {
+        clearTimer();
         if (method === "PUT" && (!j || !j.commit || !j.content)) throw new Error("GitHub 未确认写入");
         return j;
       });
+    }).catch(function (e) {
+      clearTimer();
+      if (e && (e.name === "AbortError" || /aborted/i.test(String(e.message || "")))) {
+        throw new Error("GitHub API 超时（" + Math.round(API_TIMEOUT_MS / 1000) + "s），请检查网络后重试");
+      }
+      throw e;
     });
   }
 

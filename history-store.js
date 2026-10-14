@@ -226,38 +226,27 @@ const HistoryStore = (() => {
     let userItems = [];
     /* 静态导入文件（Excel/md/user_journal）只存在于本地开发环境；公开站点上
        个人数据被排除出部署仓，404 是正常态，静默处理。个人数据的主存储是
-       私有数据仓（futures-journal-data/journal.json），见下方云端拉取。 */
-    try {
-      const excel = await fetchJson("data/imported/trading_log_excel.json");
-      excelItems = (excel.observations || []).map(normalizeExcelObservation);
-    } catch (error) { if (!/HTTP 404/.test(String(error.message || ""))) errors.push(`Excel 导入：${error.message}`); }
-    try {
-      const md = await fetchJson("data/imported/monthly_review_md.json");
-      months = md.months || [];
-      mdTrades = (md.trades || []).map(normalizeMdTrade);
-      mdNarratives = (md.narratives || []).map(normalizeMdNarrative);
-    } catch (error) { if (!/HTTP 404/.test(String(error.message || ""))) errors.push(`月度复盘导入：${error.message}`); }
-    try {
-      const user = await fetchJson("data/imported/user_journal.json");
-      userItems = (user.observations || []).map((item) => ({...item, source: "工作台日志"}));
-    } catch (error) {
-      if (!/HTTP 404/.test(String(error.message || ""))) errors.push(`用户复盘导入：${error.message}`);
-    }
-
-    /* 云端个人数据：有 Token 时拉取私有仓 journal.json（历史导入 + 各设备新写复盘），
-       与本地合并；保存复盘时会自动推回私有仓（见 putObservation） */
-    let remoteItems = [];
-    let cloudMonths = [];
-    if (typeof JournalSync !== "undefined" && JournalSync.hasToken()) {
-      try {
-        const remote = await JournalSync.pullJournal();
-        if (remote && remote.data) {
-          remoteItems = [...(remote.data.observations || []), ...(remote.data.trades || []), ...(remote.data.narratives || [])];
-          if (!months.length) months = remote.data.months || [];
-          cloudMonths = remote.data.months || [];
-        }
-      } catch (error) { errors.push(`云端复盘拉取：${error.message}`); }
-    }
+       私有数据仓（futures-journal-data/journal.json），由首屏后的 pushToCloud
+       异步并入（见 app.js 启动尾部），不阻塞首屏渲染。
+       三个探测并行发起（原来串行，国内到 github.io 单 RTT 0.5~2s，串行白等 3 倍）。 */
+    const silent404 = (label) => (error) => {
+      if (!/HTTP 404/.test(String(error.message || ""))) errors.push(`${label}：${error.message}`);
+    };
+    await Promise.all([
+      fetchJson("data/imported/trading_log_excel.json")
+        .then((excel) => { excelItems = (excel.observations || []).map(normalizeExcelObservation); })
+        .catch(silent404("Excel 导入")),
+      fetchJson("data/imported/monthly_review_md.json")
+        .then((md) => {
+          months = md.months || [];
+          mdTrades = (md.trades || []).map(normalizeMdTrade);
+          mdNarratives = (md.narratives || []).map(normalizeMdNarrative);
+        })
+        .catch(silent404("月度复盘导入")),
+      fetchJson("data/imported/user_journal.json")
+        .then((user) => { userItems = (user.observations || []).map((item) => ({...item, source: "工作台日志"})); })
+        .catch(silent404("用户复盘导入")),
+    ]);
 
     if (db) {
       try {
@@ -281,13 +270,13 @@ const HistoryStore = (() => {
       const prev = merged[item.id];
       if (!prev || Number(item.updated || 0) >= Number(prev.updated || 0)) merged[item.id] = item;
     };
-    [...excelItems, ...mdNarratives, ...mdTrades, ...userItems, ...remoteItems, ...legacy, ...migrateLocalStorageDecisions()].forEach(putMerged);
+    [...excelItems, ...mdNarratives, ...mdTrades, ...userItems, ...legacy, ...migrateLocalStorageDecisions()].forEach(putMerged);
 
     cache = {
       observations: Object.values(merged).filter((item) => item.kind !== "trade"),
       trades: Object.values(merged).filter((item) => item.kind === "trade"),
       narratives: mdNarratives,
-      months: months.length ? months : cloudMonths,
+      months: months,
     };
     cache.errors = errors;
     return cache;
@@ -298,7 +287,11 @@ const HistoryStore = (() => {
     return {observations: cache.observations, trades: cache.trades, narratives: cache.narratives, months: cache.months};
   }
 
-  /* 推送本地个人数据到私有仓（pull -> merge -> push），返回合并后全量 */
+  /* 推送本地个人数据到私有仓（pull -> merge -> push），返回合并后全量。
+     2026-10-14 起兼任「云端数据并入」唯一入口（init 不再等云拉取，首屏先出本地）：
+     sync 的推送负载就是 mergeJournal(本地, 远端) 的结果——同 id updated 新者胜，
+     远端独有条目（其他设备新写）与远端新版本都在里面，重建缓存即完成并入，
+     并持久化回 IndexedDB 供下次离线首屏。 */
   function pushToCloud() {
     if (typeof JournalSync === "undefined" || !JournalSync.hasToken()) {
       return Promise.resolve({local: true, data: localPayload()});
@@ -306,16 +299,15 @@ const HistoryStore = (() => {
     return JournalSync.syncJournal(localPayload()).then((result) => {
       unsynced = 0;
       lastPushAt = new Date().toLocaleTimeString("zh-CN", {hour: "2-digit", minute: "2-digit"});
-      /* 远端可能有本地没有的记录（其他设备写的），并入缓存 */
-      const remote = result.data || {};
-      const incoming = [...(remote.observations || []), ...(remote.trades || [])];
-      incoming.forEach((item) => {
-        if (item && item.id && !cache.observations.some((o) => o.id === item.id) && !cache.trades.some((t) => t.id === item.id)) {
-          if (item.kind === "trade") cache.trades.push(item); else cache.observations.push(item);
-          if (db) putMany(STORES.observations, [item]).catch(() => {});
-        }
-      });
-      if ((remote.months || []).length && !cache.months.length) cache.months = remote.months;
+      const merged = result.data || {};
+      const all = [...(merged.observations || []), ...(merged.trades || []), ...(merged.narratives || [])];
+      cache.observations = all.filter((item) => item && item.kind !== "trade");
+      cache.trades = all.filter((item) => item && item.kind === "trade");
+      if ((merged.months || []).length && !cache.months.length) cache.months = merged.months;
+      if (db) {
+        putMany(STORES.observations, cache.observations).catch(() => {});
+        putMany(STORES.trades, cache.trades).catch(() => {});
+      }
       return result;
     });
   }
