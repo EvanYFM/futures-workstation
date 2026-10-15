@@ -102,7 +102,7 @@ const setCard = (pre, val, pct) => {
   $(pre).className = 'v num ' + cls(val);
   if (pct != null) { const e = $(pre + '-pct'); e.textContent = sgn(pct) + fmt(pct) + '%'; e.className = cls(pct) + ' num'; }
 };
-setCard('ff-super', F.super, -0.47); setCard('ff-big', F.big, -0.45);
+setCard('ff-super', F.super, null); setCard('ff-big', F.big, null);
 setCard('ff-mid', F.mid, null); setCard('ff-small', F.small, null);
 $('ff-super-in').textContent = fmt(F.super_in); $('ff-super-out').textContent = fmt(F.super_out);
 $('ff-big-in').textContent = fmt(F.big_in); $('ff-big-out').textContent = fmt(F.big_out);
@@ -111,7 +111,7 @@ $('ff-small-in').textContent = fmt(F.small_in); $('ff-small-out').textContent = 
 $('sp-cy').textContent = fmt(DATA.fund_flow.splits['创业板']);
 $('sp-kc').textContent = fmt(DATA.fund_flow.splits['科创板']);
 $('sp-hs').textContent = fmt(DATA.fund_flow.splits['沪深300成份']);
-$('ff-note').innerHTML = DATA.fund_flow.note_stcn + '；东财口径主力净流出 174.75 亿（−0.92%），<b>小单逆势净流入 215.94 亿</b>，散户承接特征明显。';
+$('ff-note').innerHTML = DATA.fund_flow.note_stcn + (DATA.narrative && DATA.narrative.indflow ? '；' + DATA.narrative.indflow : '');
 
 /* ── ② 热力网格 ── */
 const grid = $('heat-grid'), tip = $('heat-tip');
@@ -125,7 +125,7 @@ DATA.industries.forEach(ind => {
     tip.style.display = 'block';
     tip.style.left = Math.min(e.clientX + 14, innerWidth - 250) + 'px';
     tip.style.top = (e.clientY + 14) + 'px';
-    tip.innerHTML = `<b>${ind.name}</b>（申万一级）<br>当日涨跌：<b>${sgn(ind.pct)}${fmt(ind.pct)}%</b><br>主力资金：${ind.flow >= 0 ? '<span style="color:#ff9d98">' : '<span style="color:#7fd8cb">'}${sgn(ind.flow)}${fmt(ind.flow)} 亿元</span><br><span style="opacity:.6">数据宝口径 · 2026-10-09</span>`;
+    tip.innerHTML = `<b>${ind.name}</b>（申万一级）<br>当日涨跌：<b>${sgn(ind.pct)}${fmt(ind.pct)}%</b><br>主力资金：${ind.flow >= 0 ? '<span style="color:#ff9d98">' : '<span style="color:#7fd8cb">'}${sgn(ind.flow)}${fmt(ind.flow)} 亿元</span><br><span style="opacity:.6">同花顺口径 · ${DATA.date_display ? DATA.date_display.slice(0,10) : ''}</span>`;
   });
   el.addEventListener('mouseleave', () => tip.style.display = 'none');
   grid.appendChild(el);
