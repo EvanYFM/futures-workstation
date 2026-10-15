@@ -481,10 +481,27 @@ console.log('dashboard rendered');
 
 /* ── 快照懒加载与导航 ── */
 let META = null, CUR = null;
-const fetchJSON = u => fetch(u, {cache: 'no-store'}).then(r => {
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json();
-});
+/* 2026-10-15: GitHub Pages 偶发 body 流停滞(响应头200但body挂起, fetch默认永不超时),
+   会把请求永久卡死(iframe内"加载中…"不动即此因). 改为带超时+重试: 20s超时, 最多重试2次. */
+const fetchJSON = async (u, retries = 2) => {
+  let lastErr;
+  for (let i = 0; i <= retries; i++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 20000);
+    try {
+      const r = await fetch(u, { cache: 'no-store', signal: ctrl.signal });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const j = await r.json();
+      clearTimeout(timer);
+      return j;
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e;
+      if (i < retries) await new Promise(res => setTimeout(res, 800 * (i + 1)));
+    }
+  }
+  throw lastErr;
+};
 const fmtDate = d => d.length === 8 ? `${d.slice(0,4)}-${d.slice(4,6)}-${d.slice(6,8)}` : d;
 
 async function loadDate(d, push = true) {

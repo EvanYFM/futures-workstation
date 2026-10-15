@@ -1440,11 +1440,28 @@ function unpublishObservationCard(id) {
 
 /* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
    最近5日快照在首屏后补齐，其余按需读取（写入 state.data.snapshots，浏览器 HTTP 缓存兜底回访）。 */
+/* 2026-10-15 修复「一直装载历史快照进不去」: GitHub Pages 偶发 body 流停滞
+   (响应头已200但body永久挂起, fetch 默认无超时), 会卡死启动链并占死连接额度、
+   连带 a-share 子站 iframe 一起卡住。统一改走带 20s 超时 + 2 次重试的 fetch。 */
+function fetchWithRetry(url, options = {}, retries = 2, timeoutMs = 20000) {
+  const attempt = (left) => {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    return fetch(url, { ...options, signal: ctrl.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      })
+      .finally(() => clearTimeout(timer))
+      .catch((error) => {
+        if (left > 0) return new Promise((resolve) => setTimeout(resolve, 800)).then(() => attempt(left - 1));
+        throw error;
+      });
+  };
+  return attempt(retries);
+}
 function fetchSnapshot(date) {
-  return fetch(`data/snapshots/${date}.json`).then((response) => {
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return response.json();
-  });
+  return fetchWithRetry(`data/snapshots/${date}.json`);
 }
 const snapshotPending = new Map(); /* 日期 -> 进行中的请求，避免重复拉取 */
 function ensureSnapshot(date) {
@@ -1479,19 +1496,18 @@ function preloadHistoricalSnapshots() {
   const missing = (state.data.dates || []).filter((date) => !state.data.snapshots[date]);
   return drain(missing.slice(0, 5));
 }
-const dashboardLoad = fetch("data/dashboard-meta.json", {cache: "no-store"})
-  .then((response) => { if (!response.ok) throw new Error(`HTTP ${response.status}`); return response.json(); })
+const dashboardLoad = fetchWithRetry("data/dashboard-meta.json", {cache: "no-store"})
   .then((meta) => fetchSnapshot(meta.latestDate).then((snapshot) => ({
     generatedAt: meta.generatedAt,
     dates: meta.dates,
     latestDate: meta.latestDate,
     snapshots: {[meta.latestDate]: snapshot},
   })))
-  .catch(() => fetch("run-manifest.json", {cache:"no-store"}).then((r)=>{if(!r.ok)throw new Error(`HTTP ${r.status}`);return r.json();}).then((m)=>fetchSnapshot(m.latestDate).then((snapshot)=>({generatedAt:m.generatedAt,latestDate:m.latestDate,dates:m.snapshotDates,snapshots:{[m.latestDate]:snapshot}})))); /* 备用索引也按日读取，不再下载整包 */
+  .catch(() => fetchWithRetry("run-manifest.json", {cache:"no-store"}).then((m)=>fetchSnapshot(m.latestDate).then((snapshot)=>({generatedAt:m.generatedAt,latestDate:m.latestDate,dates:m.snapshotDates,snapshots:{[m.latestDate]:snapshot}})))); /* 备用索引也按日读取，不再下载整包（2026-10-15: 同样改走超时重试） */
 
 Promise.all([
   dashboardLoad,
-  fetch("run-manifest.json", {cache: "no-store"}).then((response) => response.ok ? response.json() : null),
+  fetchWithRetry("run-manifest.json", {cache: "no-store"}, 1).catch(() => null), /* 2026-10-15: 同样防流停滞卡死 Promise.all */
   typeof HistoryStore !== "undefined" ? HistoryStore.init().catch((error) => ({observations: [], trades: [], narratives: [], months: [], errors: [String(error.message || error)]})) : Promise.resolve(null),
 ])
   .then(([data, manifest, history]) => {
