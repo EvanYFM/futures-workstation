@@ -52,13 +52,14 @@ const formatAxisAmount = (value) => numeric(value) === 0 ? "0" : `${formatSigned
 const motionBehavior = () => window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
 const currentSnapshot = () => state.data.snapshots[state.date];
 const DETAIL_SEARCH_ALIASES = { FU: "燃油", AG: "白银", JM: "焦煤", I: "铁矿石", LH: "生猪", LC: "碳酸锂", JD: "鸡蛋", P: "棕榈油", RU: "天然橡胶" };
+// 核心品种全景的分组展示口径（2026-10-21 用户精简）。
+// 注意：这里只影响首页「核心品种全景」的左侧分组，与快照 instruments[].sector
+// 的板块口径无关——后者仍保留贵金属/有色金属等细分，用于全部品种深度表。
 const CORE_GROUPS = [
-  ["贵金属", ["AU", "AG"]],
-  ["有色金属", ["SN", "LC"]],
-  ["能源化工", ["FU"]],
-  ["黑色系", ["JM", "I"]],
-  ["家人品种", ["FG", "SA", "AO", "SH"]],
-  ["农产品", ["M", "JD", "LH", "P", "RU"]],
+  ["金属", ["AU", "AG", "LC"]],
+  ["黑色系", ["JM"]],
+  ["化工", ["SA"]],
+  ["农产品", ["JD", "LH", "RU"]],
 ];
 
 function brokerGroupLabel(entry) {
