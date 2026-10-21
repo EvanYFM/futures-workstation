@@ -8,7 +8,9 @@
 
 | 页面 | 角色 |
 |---|---|
-| index.html | 研究工作站单页（六视图：总览/品种/详情/决策/历史/CTA） |
+| index.html | 研究工作站单页（七视图：总览/品种/详情/决策/历史/CTA + A股/美股美债两个子站 iframe 视图） |
+| a-share/ | A股每日仪表盘子站（独立管线，详见 docs/ashare-data-pipeline-handoff.md） |
+| us-market/ | 美股与美债复盘仪表盘子站（独立管线，见 trading-system-fresh/docs/us-market-data-pipeline-handoff.md） |
 | 404.html | 错误页 |
 
 前端资产（根目录平铺，无构建步骤）：`app.js`（渲染/交互，~1577 行）、`history-store.js`（IndexedDB 层）、`journal-sync.js`（私有仓云同步）、`styles-v2.css`、`assets/`。

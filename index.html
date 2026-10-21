@@ -16,7 +16,7 @@
     })();
   </script>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>中国投研全景</title>
+  <title>投研全景</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <!--
     正式版 · v2 全套设计(2026-09-04 起为默认首页;旧版设计已下线,历史版本见 git):
@@ -47,6 +47,7 @@
         <button class="nav-item" data-view="decisions">交易日志</button>
         <button class="nav-item" data-view="history">历史回看</button>
         <button class="nav-item" data-view="ashare">A股仪表盘</button>
+        <button class="nav-item" data-view="usmarket">美股美债</button>
         <button class="taiji" id="themeBtn" type="button" aria-label="日夜切换">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle class="t-ring" cx="12" cy="12" r="9.5"/>
@@ -63,7 +64,7 @@
       <header class="workspace-header">
         <div>
           <div class="eyebrow">POSITIONING · MARGIN FLOW · TREND · RISK</div>
-          <h1>中国投研全景</h1>
+          <h1>投研全景</h1>
         </div>
         <div class="header-meta">
           <span class="meta-label">数据日期</span>
@@ -235,6 +236,7 @@
         </div>
         <div id="statusPanel" class="status-panel"></div>
         <div id="ashareStatusPanel" class="status-panel" style="margin-top:12px"></div>
+        <div id="usmarketStatusPanel" class="status-panel" style="margin-top:12px"></div>
       </section>
 
       <!-- A股每日仪表盘(独立子站iframe, 数据与期货完全解耦) -->
@@ -249,6 +251,21 @@
             <a id="ashareOpen" class="ashare-open" href="./a-share/" target="_blank" rel="noopener">新窗口打开 ↗</a>
           </div>
           <iframe id="ashareFrame" class="ashare-frame" src="./a-share/" title="A股每日仪表盘" loading="lazy"></iframe>
+        </div>
+      </section>
+
+      <!-- 美股与美债复盘仪表盘(独立子站iframe, 与期货/A股数据管道完全解耦) -->
+      <section id="view-usmarket" class="view" aria-labelledby="usmarket-title">
+        <div class="section-heading top-heading">
+          <div><span class="section-index">附</span><h2 id="usmarket-title">美股与美债复盘仪表盘</h2></div>
+          <p>隔夜速览 / 板块轮动 / 七巨头与AI科技股 / 债务时钟 / 收益率曲线与三因子 · 按美东交易日快照</p>
+        </div>
+        <div class="ashare-wrap">
+          <div class="ashare-bar">
+            <span id="usmarketStatus" class="ashare-status">子站加载中…</span>
+            <a id="usmarketOpen" class="ashare-open" href="./us-market/" target="_blank" rel="noopener">新窗口打开 ↗</a>
+          </div>
+          <iframe id="usmarketFrame" class="ashare-frame" src="./us-market/" title="美股与美债复盘仪表盘" loading="lazy"></iframe>
         </div>
       </section>
 
@@ -294,6 +311,40 @@
             .catch(function () {
               var el = document.getElementById('ashareStatusPanel');
               if (el) el.innerHTML = '<section class="status-block"><h3>A股子站</h3><div class="status-list"><div class="status-line"><span>状态</span><strong>meta 加载失败</strong></div></div></section>';
+            });
+        })();
+        /* 美股美债子站加载状态提示 */
+        (function () {
+          var frame = document.getElementById('usmarketFrame');
+          var status = document.getElementById('usmarketStatus');
+          if (!frame || !status) return;
+          frame.addEventListener('load', function () {
+            status.textContent = '子站已就绪 · 站内顶部可切换历史交易日';
+          });
+          frame.addEventListener('error', function () {
+            status.textContent = '子站加载失败，请点右侧新窗口打开';
+          });
+        })();
+        /* 美股美债子站数据状态面板 */
+        (function () {
+          fetch('./us-market/data/dashboard-meta.json', { cache: 'no-store' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function (m) {
+              var el = document.getElementById('usmarketStatusPanel');
+              if (!el) return;
+              var dates = m.dates || [];
+              var latest = String(dates[0] || '—').replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3');
+              el.innerHTML = '<section class="status-block"><h3>美股美债子站</h3><div class="status-list">'
+                + '<div class="status-line"><span>快照天数</span><strong>' + dates.length + ' 个交易日</strong></div>'
+                + '<div class="status-line"><span>最新快照（美东）</span><strong>' + latest + '</strong></div>'
+                + '<div class="status-line"><span>索引更新</span><strong>' + (m.generatedAt || '—') + '</strong></div>'
+                + '<div class="status-line"><span>数据管道</span><strong>美股交易日次日 07:00（北京时间）自动采集入库</strong></div>'
+                + '<div class="status-line"><span>子站视图</span><strong><a href="#" onclick="document.querySelector(\'button[data-view=usmarket]\').click();return false;">切到 美股美债 →</a></strong></div>'
+                + '</div></section>';
+            })
+            .catch(function () {
+              var el = document.getElementById('usmarketStatusPanel');
+              if (el) el.innerHTML = '<section class="status-block"><h3>美股美债子站</h3><div class="status-list"><div class="status-line"><span>状态</span><strong>meta 加载失败</strong></div></div></section>';
             });
         })();
       </script>
