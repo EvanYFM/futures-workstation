@@ -70,6 +70,7 @@
         <button class="nav-item" data-view="history">历史回看</button>
         <button class="nav-item" data-view="ashare">A股仪表盘</button>
         <button class="nav-item" data-view="usmarket">美股美债</button>
+        <button class="nav-item" data-view="macro">宏观六变量</button>
         <button class="taiji" id="themeBtn" type="button" aria-label="日夜切换">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle class="t-ring" cx="12" cy="12" r="9.5"/>
@@ -259,6 +260,7 @@
         <div id="statusPanel" class="status-panel"></div>
         <div id="ashareStatusPanel" class="status-panel" style="margin-top:12px"></div>
         <div id="usmarketStatusPanel" class="status-panel" style="margin-top:12px"></div>
+        <div id="macroStatusPanel" class="status-panel" style="margin-top:12px"></div>
       </section>
 
       <!-- A股每日仪表盘(独立子站iframe, 数据与期货完全解耦) -->
@@ -288,6 +290,22 @@
             <a id="usmarketOpen" class="ashare-open" href="./us-market/" target="_blank" rel="noopener">新窗口打开 ↗</a>
           </div>
           <iframe id="usmarketFrame" class="ashare-frame" src="./us-market/" title="美股与美债复盘仪表盘" loading="lazy"></iframe>
+        </div>
+      </section>
+
+      <!-- 宏观六变量研究框架(独立站iframe, 与期货/A股/美股美债数据管道完全解耦;
+           独立发布于 macro-workstation-site, 此处仅作统一入口嵌入) -->
+      <section id="view-macro" class="view" aria-labelledby="macro-title">
+        <div class="section-heading top-heading">
+          <div><span class="section-index">附</span><h2 id="macro-title">宏观六变量研究框架</h2></div>
+          <p>六变量状态矩阵 / 合成水位 / 反证触发 / 事件日历 / FOMC 定价守卫 / 历史复盘报告 · 按各指标发布节奏更新</p>
+        </div>
+        <div class="ashare-wrap">
+          <div class="ashare-bar">
+            <span id="macroStatus" class="ashare-status">子站加载中…</span>
+            <a id="macroOpen" class="ashare-open" href="https://evanyfm.github.io/macro-workstation-site/" target="_blank" rel="noopener">新窗口打开 ↗</a>
+          </div>
+          <iframe id="macroFrame" class="ashare-frame" src="https://evanyfm.github.io/macro-workstation-site/" title="宏观六变量研究框架" loading="lazy"></iframe>
         </div>
       </section>
 
@@ -346,6 +364,41 @@
           frame.addEventListener('error', function () {
             status.textContent = '子站加载失败，请点右侧新窗口打开';
           });
+        })();
+        /* 宏观六变量独立站加载状态提示 */
+        (function () {
+          var frame = document.getElementById('macroFrame');
+          var status = document.getElementById('macroStatus');
+          if (!frame || !status) return;
+          frame.addEventListener('load', function () {
+            status.textContent = '子站已就绪 · 站内可切换六变量页签与复盘时间线';
+          });
+          frame.addEventListener('error', function () {
+            status.textContent = '子站加载失败，请点右侧新窗口打开';
+          });
+        })();
+        /* 宏观六变量独立站数据状态面板（跨域只读 latest.json，GitHub Pages 带 CORS *） */
+        (function () {
+          fetch('https://evanyfm.github.io/macro-workstation-site/data/latest.json', { cache: 'no-cache' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then(function (s) {
+              var el = document.getElementById('macroStatusPanel');
+              if (!el) return;
+              var counts = (s && s.dataHealth && s.dataHealth.counts) || {};
+              var asOf = String((s && s.asOf) || '—').replace('T', ' ').replace('+08:00', '');
+              var trig = (s && s.triggeredAlerts) || [];
+              el.innerHTML = '<section class="status-block"><h3>宏观六变量研究框架</h3><div class="status-list">'
+                + '<div class="status-line"><span>最新快照（北京）</span><strong>' + asOf + '</strong></div>'
+                + '<div class="status-line"><span>数据健康</span><strong>可用 ' + (counts.fresh ?? '—') + ' · 过期 ' + (counts.stale ?? '—') + ' · 缺失 ' + (counts.missing ?? '—') + ' · 待核验 ' + (counts.manual ?? '—') + '</strong></div>'
+                + '<div class="status-line"><span>反证触发</span><strong>' + (trig.length ? trig.length + ' 条（详见子站主论断条）' : '无') + '</strong></div>'
+                + '<div class="status-line"><span>数据管道</span><strong>每日 18:00（北京时间）自动采集入库</strong></div>'
+                + '<div class="status-line"><span>子站视图</span><strong><a href="#" onclick="document.querySelector(\'button[data-view=macro]\').click();return false;">切到 宏观六变量 →</a></strong></div>'
+                + '</div></section>';
+            })
+            .catch(function () {
+              var el = document.getElementById('macroStatusPanel');
+              if (el) el.innerHTML = '<section class="status-block"><h3>宏观六变量研究框架</h3><div class="status-list"><div class="status-line"><span>状态</span><strong>独立站数据加载失败</strong></div></div></section>';
+            });
         })();
         /* 美股美债子站数据状态面板 */
         (function () {
