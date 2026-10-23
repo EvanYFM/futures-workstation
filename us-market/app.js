@@ -82,7 +82,7 @@ function heatColor(p) {
 }
 
 /* ══════════ ④ 美元流动性与风险偏好 ══════════ */
-function renderLiquidity(L, t) {
+function renderLiquidity(L, t, structure) {
   const hideIds = ['fund-cards', 'ch-netliq', 'risk-cards', 'ch-styles', 'credit-cards'];
   const secH3 = document.getElementById('liq-desc').closest('section').querySelectorAll('h3.blk');
   if (!L) {
@@ -156,16 +156,22 @@ function renderLiquidity(L, t) {
 
   const rot = L.rotation || {};
   const st = rot.state;
+  const regimeCode = structure?.regime?.code;
   const verdictText = st === 'risk-off'
-    ? '风险偏好收缩：资金撤离成长/科技，转向防御与必需消费'
-    : st === 'risk-on' ? '风险偏好扩张：成长/科技占优，防御落后'
-    : '风格中性：成长与防御差距不显著';
+    ? (regimeCode === 'structural-deai'
+        ? '结构性收缩：去 AI 敞口，而非全面避险'
+        : '风险偏好收缩：资金撤离成长/科技，转向防御与必需消费')
+    : st === 'risk-on'
+      ? (regimeCode === 'narrow-rally' ? '窄幅抱团：指数上涨由少数权重股拉动' : '风险偏好扩张：成长/科技占优，防御落后')
+      : '风格中性：成长与防御差距不显著';
   $('liq-verdict').innerHTML =
-    `<div class="sb-t">${st === 'risk-off' ? '🟢' : st === 'risk-on' ? '🔴' : '⚪'} ${verdictText}</div>
+    `<div class="sb-t">${st === 'risk-off' ? '▼' : st === 'risk-on' ? '▲' : '•'} ${verdictText}</div>
      <div class="sb-b">成长 − 防御：近5日 <b>${sgn(rot.growth_minus_defensive_5d)}${fmt(rot.growth_minus_defensive_5d)}pp</b> ·
      近20日 <b>${sgn(rot.growth_minus_defensive_20d)}${fmt(rot.growth_minus_defensive_20d)}pp</b>（pp 为百分点差，负值=防御跑赢）。
      配合 <b>科技/必需消费比值</b>近5日 ${sgn(ratios.find(r => r.key === 'tech_defensive')?.d5)}${fmt(ratios.find(r => r.key === 'tech_defensive')?.d5)}%、
-     <b>等权/市值权</b> ${sgn(ratios.find(r => r.key === 'breadth')?.d5)}${fmt(ratios.find(r => r.key === 'breadth')?.d5)}% 交叉验证资金去向。</div>`;
+     <b>等权/市值权</b> ${sgn(ratios.find(r => r.key === 'breadth')?.d5)}${fmt(ratios.find(r => r.key === 'breadth')?.d5)}% 交叉验证资金去向。` +
+    (structure?.regime ? `<br><span style="color:var(--ink3)">结构判别（见⑤）：<b style="color:var(--ink2)">${structure.regime.label}</b>——风格差为负但宽度为正时，属权重股/AI 链拖累，不等于全市场避险。</span>` : '') +
+    `</div>`;
 
   const v = L.vol || {}, c = L.credit || {};
   $('credit-cards').innerHTML = `
@@ -178,6 +184,86 @@ function renderLiquidity(L, t) {
     <div class="card"><div class="k"><span>VIX − VIX3M（期限结构）</span></div>
       <div class="v num ${cls(v.term)}">${sgn(v.term)}${fmt(v.term)}</div>
       <div class="s">VIX ${fmt(v.vix)} / 3M ${fmt(v.vix3m)} · ${v.term != null && v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静'}</div></div>`;
+}
+
+/* ══════════ ⑤ 结构判别与观察池 ══════════ */
+const GROUP_NAMES = { breadth: '宽度与基准', defensive: '防御/红利', real_assets: '实物/抗通胀', ai_offense: 'AI/进攻' };
+function renderStructure(S, t) {
+  if (!S) {
+    $('regime-box').innerHTML = '<div class="sb-t">该快照无结构判别数据</div><div class="sb-b">20261022 起的新快照才包含该模块。</div>';
+    $('struct-cards').innerHTML = '<div class="card"><div class="v">—</div></div>';
+    return;
+  }
+  const ix = S.index || {}, ai = S.ai_chain || {}, na = S.non_ai || {}, disp = S.dispersion || {}, rg = S.regime || {};
+  const quad = [
+    { code: 'structural-deai', t: '指数↓ / 宽度↑', n: '结构性去AI' },
+    { code: 'broad-riskoff', t: '指数↓ / 宽度↓', n: '全面避险' },
+    { code: 'broad-riskon', t: '指数↑ / 宽度↑', n: '全面 risk-on' },
+    { code: 'narrow-rally', t: '指数↑ / 宽度↓', n: '窄幅抱团' },
+  ];
+  $('regime-box').innerHTML =
+    `<div class="sb-t">当前结构：${rg.label || '—'}</div>
+     <div class="sb-b">${rg.desc || ''} · 数据日期 ${S.as_of || '—'}</div>
+     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+       ${quad.map(q => `<div style="font-size:11.5px;padding:6px 10px;border:1px solid ${q.code === rg.code ? 'var(--ink)' : 'var(--line)'};border-radius:4px;background:${q.code === rg.code ? 'var(--softbg)' : 'transparent'};color:${q.code === rg.code ? 'var(--ink)' : 'var(--ink3)'}">
+         <b>${q.n}</b> · ${q.t}</div>`).join('')}
+     </div>`;
+  $('struct-cards').innerHTML = `
+    <div class="card"><div class="k"><span>标普500（市值权）</span></div>
+      <div class="v num ${cls(ix.spx_d1)}">${sgn(ix.spx_d1)}${fmt(ix.spx_d1)}%</div>
+      <div class="s">SPY ${sgn(ix.spy_d1)}${fmt(ix.spy_d1)}%</div></div>
+    <div class="card"><div class="k"><span>标普等权 RSP</span></div>
+      <div class="v num ${cls(ix.rsp_d1)}">${sgn(ix.rsp_d1)}${fmt(ix.rsp_d1)}%</div>
+      <div class="s">等权 − 市值权：<b class="${cls(ix.spread)}">${sgn(ix.spread)}${fmt(ix.spread)}pp</b></div></div>
+    <div class="card"><div class="k"><span>AI 链等权篮子</span></div>
+      <div class="v num ${cls(ai.basket_d1)}">${sgn(ai.basket_d1)}${fmt(ai.basket_d1)}%</div>
+      <div class="s">相对标普 <b class="${cls(ai.vs_spx_d1)}">${sgn(ai.vs_spx_d1)}${fmt(ai.vs_spx_d1)}pp</b> · 非AI 8行业 ${sgn(na.basket_d1)}${fmt(na.basket_d1)}%</div></div>
+    <div class="card"><div class="k"><span>离散度：z≥2 个股</span></div>
+      <div class="v num">${disp.z2_count ?? '—'}<span style="font-size:13px;color:var(--ink3)"> / ${disp.universe ?? '—'}</span></div>
+      <div class="s">横截面标准差 ${fmt(disp.cs_std)}% · 跟踪池口径，非全市场</div></div>`;
+
+  const groups = {};
+  (S.watchlist || []).forEach(w => {
+    if (!groups[w.group]) groups[w.group] = { name: w.group_name, d1s: [], tickers: [] };
+    if (w.d1 != null) groups[w.group].d1s.push(w.d1);
+    groups[w.group].tickers.push(w);
+  });
+  const order = ['breadth', 'defensive', 'real_assets', 'ai_offense'];
+  const rows = order.filter(g => groups[g]);
+  $('watch-table').innerHTML =
+    '<tr><th>名称</th><th>代码</th><th>最新</th><th>1日</th><th>5日</th><th>20日</th><th>相对标普20日</th></tr>' +
+    rows.map(g => {
+      const grp = groups[g];
+      return `<tr><td colspan="7" style="background:var(--softbg);color:var(--ink2);font-weight:600">${grp.name}
+        <span style="font-weight:400;color:var(--ink3)">· 组内等权当日 ${sgn(avg(grp.d1s))}${fmt(avg(grp.d1s))}%</span></td></tr>` +
+        grp.tickers.map(w => `<tr>
+          <td>${w.name}</td><td style="color:var(--ink3)">${w.ticker}</td>
+          <td class="num">${fmt(w.price)}</td>
+          <td class="num ${cls(w.d1)}">${sgn(w.d1)}${fmt(w.d1)}%</td>
+          <td class="num ${cls(w.d5)}">${sgn(w.d5)}${fmt(w.d5)}%</td>
+          <td class="num ${cls(w.d20)}">${sgn(w.d20)}${fmt(w.d20)}%</td>
+          <td class="num ${cls(w.rs20)}">${sgn(w.rs20)}${fmt(w.rs20)}pp</td></tr>`).join('');
+    }).join('');
+
+  const chart = makeChart('ch-groups');
+  if (chart) {
+    const vals = rows.map(g => avg(groups[g].d1s));
+    chart.setOption({
+      tooltip: { ...TIP, valueFormatter: v => v == null ? '—' : v + '%' },
+      grid: { left: 50, right: 20, top: 16, bottom: 24 },
+      xAxis: { type: 'category', data: rows.map(g => GROUP_NAMES[g] || g), ...AX },
+      yAxis: { type: 'value', name: '%', ...AX },
+      series: [{ type: 'bar', barMaxWidth: 40,
+        data: vals.map(v => ({ value: v, itemStyle: { color: (v ?? 0) >= 0 ? t.up : t.down } })),
+        label: { show: true, position: 'top', fontSize: 11, color: t.text,
+                 formatter: p => p.value == null ? '—' : (p.value > 0 ? '+' : '') + p.value.toFixed(2) } }]
+    });
+  }
+}
+
+function avg(arr) {
+  const xs = (arr || []).filter(x => x != null);
+  return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 }
 
 /* ══════════ 渲染主流程 ══════════ */
@@ -311,7 +397,9 @@ function renderAll(DATA) {
       <td class="num ${cls(c.rs20)}">${sgn(c.rs20)}${fmt(c.rs20)}</td></tr>`).join('');
 
   /* ④ 美元流动性与风险偏好 */
-  renderLiquidity(DATA.liquidity, t);
+  renderLiquidity(DATA.liquidity, t, DATA.structure);
+  /* ⑤ 结构判别与观察池 */
+  renderStructure(DATA.structure, t);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;

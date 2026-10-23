@@ -237,9 +237,21 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="cards c3" id="credit-cards"></div>
 </section>
 
-<!-- ═══════════ ⑤ 美债收益率曲线 ═══════════ -->
+<!-- ═══════════ ⑤ 结构判别与观察池 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑤ 美债收益率曲线</h2><span class="tag">Treasury Yield Curve</span></div>
+  <div class="sec-head"><h2>⑤ 结构判别与观察池</h2><span class="tag">De-AI Rotation &amp; Watchlist</span></div>
+  <div class="sec-desc" id="struct-desc">指数下跌 ≠ 全面避险。用「指数层（市值权）× 宽度层（等权−市值权）」二分：<b>指数跌 + 等权涨 = 结构性去AI</b>（抛压集中于权重/AI 链）；两者同跌才是全面避险；指数涨而等权落后则是窄幅抱团。再用 AI 链/非AI 链等权差、z≥2 离散度与观察池交叉验证。</div>
+  <div class="sig-box" id="regime-box"></div>
+  <div class="cards c4" id="struct-cards"></div>
+  <h3 class="blk">观察池：防御/红利/实物 vs AI/进攻 <span class="hint">按你的盯盘清单 · 1/5/20日涨跌 + 相对标普20日</span></h3>
+  <table class="matrix" id="watch-table"></table>
+  <h3 class="blk">组别等权当日涨跌 <span class="hint">宽度基准 / 防御红利 / 实物抗通胀 / AI进攻</span></h3>
+  <div class="chart small" id="ch-groups"></div>
+</section>
+
+<!-- ═══════════ ⑥ 美债收益率曲线 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑥ 美债收益率曲线</h2><span class="tag">Treasury Yield Curve</span></div>
   <div class="sec-desc" id="curve-desc">正常情况下长端高于短端；曲线倒挂（短高长低）往往预示衰退。短端体现政策意志，长端体现市场预期。</div>
   <div class="spread-grid" id="spread-cards"></div>
   <div class="chart mid" id="ch-curve"></div>
@@ -249,17 +261,17 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="chart" id="ch-hist"></div>
 </section>
 
-<!-- ═══════════ ⑥ 10Y 三因子分解 ═══════════ -->
+<!-- ═══════════ ⑦ 10Y 三因子分解 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑥ 10Y 三因子分解</h2><span class="tag">Nominal = Real + Breakeven + Term Premium</span></div>
+  <div class="sec-head"><h2>⑦ 10Y 三因子分解</h2><span class="tag">Nominal = Real + Breakeven + Term Premium</span></div>
   <div class="sec-desc" id="factor-desc">名义利率 ≈ 实际利率（TIPS）+ 通胀预期（Breakeven）；期限溢价（NY Fed ACM）是嵌入其中的「未来风险补偿」。每一次 10Y 变动，先拆开看是哪一块在动。</div>
   <div class="cards c4" id="factor-cards"></div>
   <div class="chart" id="ch-factors"></div>
 </section>
 
-<!-- ═══════════ ⑦ 每日研判 ═══════════ -->
+<!-- ═══════════ ⑧ 每日研判 ═══════════ -->
 <section id="sec-calls">
-  <div class="sec-head"><h2>⑦ 每日研判</h2><span class="tag">Daily Calls</span></div>
+  <div class="sec-head"><h2>⑧ 每日研判</h2><span class="tag">Daily Calls</span></div>
   <div id="calls-body">
     <div class="sig-box"><div class="sb-t">今日研判待补充</div>
       <div class="sb-b">研判由每日复盘流程在数据快照基础上撰写，通常于北京时间 07:30 前随自动化更新。</div></div>
