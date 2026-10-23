@@ -61,31 +61,12 @@ function sparkline(arr, w = 120, h = 30) {
     <polyline points="${pts}" fill="none" stroke="${color}" stroke-width="1.5"/></svg>`;
 }
 
-/* ── 数字格式化 ── */
-function fmtMoney(x) {  // 大额美元 → $40.40万亿
-  if (x == null) return '—';
-  if (x >= 1e12) return '$' + (x / 1e12).toFixed(2) + ' 万亿';
-  if (x >= 1e8) return '$' + (x / 1e8).toFixed(2) + ' 亿';
-  return '$' + Math.round(x).toLocaleString('en-US');
-}
-function fmtClock(x) {
-  return '$ ' + Math.floor(x).toLocaleString('en-US');
-}
-
-/* ── 债务时钟动画 ── */
-let clockTimer = null;
-function startClock(base, rate, asOf) {
-  if (clockTimer) clearInterval(clockTimer);
-  if (base == null || rate == null) { $('debt-clock').textContent = '$ —'; return; }
-  const t0 = Date.now();
-  const tick = () => {
-    const cur = base + rate * (Date.now() - t0) / 1000;
-    $('debt-clock').textContent = fmtClock(cur);
-  };
-  $('debt-clock-sub').innerHTML =
-    `每秒增加约 <b>$ ${Math.round(rate).toLocaleString('en-US')}</b>（近30个发布日日均推算）· 官方锚点 ${asOf || '—'}（T+1）`;
-  tick();
-  clockTimer = setInterval(tick, 200);
+/* ── 风险偏好状态 → 徽标 ── */
+function stateChip(d) {  // d>0 偏进攻(红/涨)，d<0 偏防守(绿/跌)，与全站红涨绿跌一致
+  if (d == null) return '<span class="state-chip mid">—</span>';
+  if (d >= 0.3) return '<span class="state-chip on">risk-on</span>';
+  if (d <= -0.3) return '<span class="state-chip off">risk-off</span>';
+  return '<span class="state-chip mid">neutral</span>';
 }
 
 /* ── 热力格 ── */
@@ -98,6 +79,105 @@ function heatColor(p) {
     : p < 0
       ? `background:rgba(15,123,108,${a.toFixed(2)});color:${document.documentElement.dataset.theme === 'dark' ? '#f0ede4' : (a > 0.45 ? '#fff' : t.ink)}`
       : 'background:var(--softbg);color:var(--ink2)';
+}
+
+/* ══════════ ④ 美元流动性与风险偏好 ══════════ */
+function renderLiquidity(L, t) {
+  const hideIds = ['fund-cards', 'ch-netliq', 'risk-cards', 'ch-styles', 'credit-cards'];
+  const secH3 = document.getElementById('liq-desc').closest('section').querySelectorAll('h3.blk');
+  if (!L) {
+    hideIds.forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    secH3.forEach(h => { h.style.display = 'none'; });
+    $('liq-desc').innerHTML = '该快照为旧版结构，不含流动性模块（20261022 起启用）。';
+    const v = $('liq-verdict');
+    if (v) { v.style.display = ''; v.innerHTML = '<div class="sb-t">本快照无流动性数据</div><div class="sb-b">切换至 20261022 或更新日期查看资金价格、净流动性与风险偏好温度计。</div>'; }
+    return;
+  }
+  hideIds.forEach(id => { const el = $(id); if (el) el.style.display = ''; });
+  secH3.forEach(h => { h.style.display = ''; });
+  const f = L.funding || {};
+  const bp = x => x == null ? '—' : `${sgn(x)}${x.toFixed(1)}bp`;
+  $('fund-cards').innerHTML = [
+    { k: 'SOFR（有担保隔夜融资）', v: f.sofr?.value, s: f.sofr?.date || '—', extra: `20日 ${bp(f.sofr?.chg20_bp)}`, cls: '' },
+    { k: 'SOFR − IORB（融资压力）', v: f.sofr_iorb_bp, unit: 'bp', s: (f.sofr_iorb_bp ?? 0) > 5 ? '转正走阔 → 准备金偏紧' : '为负/贴近零 → 融资宽松', extra: '', cls: cls(f.sofr_iorb_bp) },
+    { k: 'EFFR（无担保隔夜）', v: f.effr?.value, s: f.effr?.date || '—', extra: '', cls: '' },
+    { k: 'IORB（准备金利率）', v: f.iorb?.value, s: f.iorb?.date || '—', extra: '政策利率走廊上沿', cls: '' },
+  ].map(c => `<div class="card"><div class="k"><span>${c.k}</span></div>
+      <div class="v num ${c.cls}">${c.v == null ? '—' : (c.unit ? c.v.toFixed(1) + c.unit : c.v.toFixed(2) + '%')}</div>
+      <div class="s">${c.s}${c.extra ? ' · ' + c.extra : ''}</div></div>`).join('');
+
+  const b = L.balances;
+  const liqChart = makeChart('ch-netliq');
+  if (b && liqChart && b.net_liquidity_hist?.length) {
+    const hist = b.net_liquidity_hist;
+    liqChart.setOption({
+      tooltip: { ...TIP, trigger: 'axis', valueFormatter: v => '$' + Number(v).toFixed(0) + 'B' },
+      grid: { left: 56, right: 20, top: 24, bottom: 24 },
+      xAxis: { type: 'category', data: hist.map(p => p[0]), ...AX },
+      yAxis: { type: 'value', scale: true, ...AX },
+      series: [{ type: 'line', data: hist.map(p => p[1]), showSymbol: false,
+        lineStyle: { color: t.accent, width: 1.8 }, areaStyle: { color: t.accent, opacity: 0.07 },
+        markLine: { silent: true, symbol: 'none', label: { show: false },
+          lineStyle: { color: t.split, type: 'dashed' },
+          data: [{ type: 'average' }] } }]
+    });
+    $('liq-desc').innerHTML =
+      `净流动性 <b>$${(b.net_liquidity_bn / 1000).toFixed(2)} 万亿</b>（联储总资产 $${(b.walcl.value_bn / 1000).toFixed(2)}T − TGA $${(b.tga ? b.tga.value_bn / 1000 : 0).toFixed(2)}T − RRP $${b.rrp ? b.rrp.value_bn : 0}B）。` +
+      `四层观察：资金价格 → 数量 → 信用与波动 → 风险偏好。`;
+  }
+
+  const ratios = L.ratios || [];
+  $('risk-cards').innerHTML = ratios.map(r => `
+    <div class="card">
+      <div class="k"><span>${r.name}</span>${stateChip(r.d5)}</div>
+      <div class="v num ${cls(r.d5)}">${sgn(r.d5)}${fmt(r.d5)}%</div>
+      <div class="s num">5日 · 20日 ${sgn(r.d20)}${fmt(r.d20)}%</div>
+      ${sparkline(r.spark)}
+      <div class="mini">${r.meaning}</div>
+    </div>`).join('');
+
+  const styles = L.styles || [];
+  const styleChart = makeChart('ch-styles');
+  if (styleChart) {
+    styleChart.setOption({
+      tooltip: { ...TIP },
+      legend: { textStyle: { color: t.text }, top: 0 },
+      grid: { left: 60, right: 20, top: 30, bottom: 24 },
+      xAxis: { type: 'category', data: styles.map(s => s.name.split('（')[0]), ...AX },
+      yAxis: { type: 'value', name: '%', ...AX },
+      series: [
+        { name: '近5日', type: 'bar', barMaxWidth: 34, color: t.ink,
+          data: styles.map(s => ({ value: s.d5, itemStyle: { color: (s.d5 ?? 0) >= 0 ? t.up : t.down } })) },
+        { name: '近20日', type: 'bar', barMaxWidth: 34, color: t.sub,
+          data: styles.map(s => ({ value: s.d20, itemStyle: { color: (s.d20 ?? 0) >= 0 ? 'rgba(212,76,71,.40)' : 'rgba(15,123,108,.40)' } })) }
+      ]
+    });
+  }
+
+  const rot = L.rotation || {};
+  const st = rot.state;
+  const verdictText = st === 'risk-off'
+    ? '风险偏好收缩：资金撤离成长/科技，转向防御与必需消费'
+    : st === 'risk-on' ? '风险偏好扩张：成长/科技占优，防御落后'
+    : '风格中性：成长与防御差距不显著';
+  $('liq-verdict').innerHTML =
+    `<div class="sb-t">${st === 'risk-off' ? '🟢' : st === 'risk-on' ? '🔴' : '⚪'} ${verdictText}</div>
+     <div class="sb-b">成长 − 防御：近5日 <b>${sgn(rot.growth_minus_defensive_5d)}${fmt(rot.growth_minus_defensive_5d)}pp</b> ·
+     近20日 <b>${sgn(rot.growth_minus_defensive_20d)}${fmt(rot.growth_minus_defensive_20d)}pp</b>（pp 为百分点差，负值=防御跑赢）。
+     配合 <b>科技/必需消费比值</b>近5日 ${sgn(ratios.find(r => r.key === 'tech_defensive')?.d5)}${fmt(ratios.find(r => r.key === 'tech_defensive')?.d5)}%、
+     <b>等权/市值权</b> ${sgn(ratios.find(r => r.key === 'breadth')?.d5)}${fmt(ratios.find(r => r.key === 'breadth')?.d5)}% 交叉验证资金去向。</div>`;
+
+  const v = L.vol || {}, c = L.credit || {};
+  $('credit-cards').innerHTML = `
+    <div class="card"><div class="k"><span>高收益债利差 HY OAS</span></div>
+      <div class="v num">${fmt(c.hy_oas)}%</div>
+      <div class="s">${c.date || '—'} · 20日 ${bp(c.hy_oas_chg20)}（走阔=信用风险上升）</div></div>
+    <div class="card"><div class="k"><span>MOVE（债市隐含波动）</span></div>
+      <div class="v num">${fmt(v.move, 1)}</div>
+      <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
+    <div class="card"><div class="k"><span>VIX − VIX3M（期限结构）</span></div>
+      <div class="v num ${cls(v.term)}">${sgn(v.term)}${fmt(v.term)}</div>
+      <div class="s">VIX ${fmt(v.vix)} / 3M ${fmt(v.vix3m)} · ${v.term != null && v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静'}</div></div>`;
 }
 
 /* ══════════ 渲染主流程 ══════════ */
@@ -230,41 +310,8 @@ function renderAll(DATA) {
       <td class="num ${cls(c.d60)}">${sgn(c.d60)}${fmt(c.d60)}%</td>
       <td class="num ${cls(c.rs20)}">${sgn(c.rs20)}${fmt(c.rs20)}</td></tr>`).join('');
 
-  /* ④ 债务时钟 */
-  const debt = DATA.debt;
-  if (debt) {
-    startClock(debt.total, debt.per_second_rate, debt.as_of);
-    const ie = debt.interest_expense;
-    $('debt-cards').innerHTML = `
-      <div class="spread-card"><div class="sk">人均负债</div>
-        <div class="sv num">${debt.per_capita != null ? '$ ' + Math.round(debt.per_capita).toLocaleString('en-US') : '—'}</div>
-        <div class="ss">${debt.population_note || ''}</div></div>
-      <div class="spread-card"><div class="sk">年利息支出（FY累计）</div>
-        <div class="sv num">${ie ? fmtMoney(ie.value) : '—'}</div>
-        <div class="ss">${ie ? (ie.note || '') + ' · ' + ie.as_of : 'Treasury 端点不可用'}</div></div>
-      <div class="spread-card"><div class="sk">债务 / GDP</div>
-        <div class="sv num">—</div>
-        <div class="ss">GDP 季频序列待 FRED 恢复后接入</div></div>`;
-    const debtChart = makeChart('ch-debt');
-    if (debtChart && debt.history?.length) {
-      debtChart.setOption({
-        tooltip: { ...TIP, trigger: 'axis',
-          valueFormatter: v => '$' + (v / 1e12).toFixed(2) + ' 万亿' },
-        grid: { left: 60, right: 20, top: 16, bottom: 24 },
-        xAxis: { type: 'category', data: debt.history.map(r => r.date), ...AX },
-        yAxis: { type: 'value', name: '万亿$',
-          axisLabel: { ...AX.axisLabel, formatter: v => (v / 1e12).toFixed(1) },
-          axisLine: AX.axisLine, axisTick: AX.axisTick, splitLine: AX.splitLine,
-          min: v => Math.floor(v.min / 1e12) * 1e12 },
-        series: [{ type: 'line', data: debt.history.map(r => r.total),
-          showSymbol: false, lineStyle: { color: t.gold, width: 1.6 },
-          areaStyle: { color: t.gold, opacity: 0.08 } }]
-      });
-    }
-  } else {
-    startClock(null, null, null);
-    $('debt-cards').innerHTML = '<div class="spread-card"><div class="sv">—</div><div class="ss">Treasury Fiscal Data 不可用</div></div>';
-  }
+  /* ④ 美元流动性与风险偏好 */
+  renderLiquidity(DATA.liquidity, t);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
@@ -304,6 +351,25 @@ function renderAll(DATA) {
         ].filter(Boolean)
       });
     }
+
+    /* 关键期限矩阵：当日/1周/1月/1年前 + 周变动 */
+    const pick = (c, tenor) => {
+      if (!c || !c.tenors) return null;
+      const i = c.tenors.indexOf(tenor);
+      return i >= 0 ? c.values[i] : null;
+    };
+    const keyTenors = ['1 Mo', '3 Mo', '6 Mo', '1 Yr', '2 Yr', '5 Yr', '10 Yr', '30 Yr'];
+    const bpDiff = (a, b) => (a == null || b == null) ? null : Math.round((a - b) * 100);
+    $('curve-table').innerHTML =
+      '<tr><th>期限</th><th>当日</th><th>1周前</th><th>1月前</th><th>1年前</th><th>周变动</th></tr>' +
+      keyTenors.map(tn => {
+        const cur = pick(R.curve, tn), w = pick(R.curve_1w, tn), m = pick(R.curve_1m, tn), y = pick(R.curve_1y, tn);
+        const d = bpDiff(cur, w);
+        return `<tr><td>${tn.replace(' Mo', '个月').replace(' Yr', '年')}</td>
+          <td class="num">${fmt(cur)}%</td><td class="num">${fmt(w)}%</td>
+          <td class="num">${fmt(m)}%</td><td class="num">${fmt(y)}%</td>
+          <td class="num ${cls(d)}">${d == null ? '—' : sgn(d) + d + 'bp'}</td></tr>`;
+      }).join('');
 
     const histChart = makeChart('ch-hist');
     if (histChart && R.hist_10y?.length) {

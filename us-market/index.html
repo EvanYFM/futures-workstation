@@ -120,11 +120,11 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .matrix tr:hover td{background:var(--softbg)}
 .theme-tag{display:inline-block;font-size:11px;border:1px solid var(--line2);border-radius:3px;padding:0 6px;color:var(--ink2)}
 
-/* 债务时钟 */
-.clock-box{border:1px solid var(--line2);border-radius:8px;padding:22px 26px;background:var(--softbg);text-align:center}
-.clock-box .ck{font-size:12.5px;color:var(--ink2);letter-spacing:2px}
-.clock-box .cv{font-size:34px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:1px;margin-top:6px}
-.clock-box .cs{font-size:12px;color:var(--ink3);margin-top:6px}
+/* 风险偏好状态徽标 */
+.state-chip{display:inline-block;font-size:10.5px;font-weight:600;border-radius:3px;padding:1px 7px;white-space:nowrap}
+.state-chip.off{background:var(--downbg);color:var(--down);border:1px solid rgba(15,123,108,.35)}
+.state-chip.on{background:var(--upbg);color:var(--up);border:1px solid rgba(212,76,71,.35)}
+.state-chip.mid{background:var(--softbg);color:var(--ink2);border:1px solid var(--line2)}
 .spread-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:10px}
 @media(max-width:900px){.spread-grid{grid-template-columns:1fr}}
 .spread-card{border:1px solid var(--line2);border-radius:6px;padding:11px 14px}
@@ -215,18 +215,26 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <table class="matrix" id="ai-table"></table>
 </section>
 
-<!-- ═══════════ ④ 美债债务时钟 ═══════════ -->
+<!-- ═══════════ ④ 美元流动性与风险偏好 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>④ 美债债务时钟</h2><span class="tag">U.S. National Debt Clock</span></div>
-  <div class="sec-desc">美国国债总额实时外推：以财政部最新官方值为锚，按近 30 个发布日的日均增速逐秒推算。官方数据 T+1 发布。</div>
-  <div class="clock-box">
-    <div class="ck">U.S. NATIONAL DEBT</div>
-    <div class="cv" id="debt-clock">$ —</div>
-    <div class="cs" id="debt-clock-sub">—</div>
-  </div>
-  <div class="spread-grid" id="debt-cards"></div>
-  <h3 class="blk">近一年债务总额 <span class="hint">Treasury Fiscal Data · Debt to the Penny</span></h3>
-  <div class="chart" id="ch-debt"></div>
+  <div class="sec-head"><h2>④ 美元流动性与风险偏好</h2><span class="tag">USD Liquidity &amp; Risk Appetite</span></div>
+  <div class="sec-desc" id="liq-desc">四层观察：<b>资金价格</b>（SOFR−IORB，融资是否紧张）→ <b>流动性数量</b>（净流动性）→ <b>信用与波动</b>（HY OAS / MOVE / VIX 期限）→ <b>风险偏好</b>（风格与比值）。当科技与高β走弱、防御与必需消费走强、信用价差走阔，即为风险偏好收缩。</div>
+
+  <h3 class="blk">资金价格 <span class="hint">SOFR / EFFR / IORB · SOFR−IORB 转正=融资紧张</span></h3>
+  <div class="cards c4" id="fund-cards"></div>
+
+  <h3 class="blk">流动性数量：净流动性 = 联储总资产 − TGA − 隔夜逆回购 <span class="hint">FRED WALCL / WTREGEN / RRPONTSYD · 十亿美元</span></h3>
+  <div class="chart" id="ch-netliq"></div>
+
+  <h3 class="blk">风险偏好温度计 <span class="hint">比值走强=偏进攻 · 迷你走势为近20日</span></h3>
+  <div class="cards c5" id="risk-cards"></div>
+
+  <h3 class="blk">风格轮动：防御 / 周期 / 成长 <span class="hint">11只SPDR等权分组 · 5日与20日涨跌</span></h3>
+  <div class="chart small" id="ch-styles"></div>
+  <div class="sig-box" id="liq-verdict"></div>
+
+  <h3 class="blk">信用与波动 <span class="hint">HY OAS · MOVE · VIX 期限结构（VIX−VIX3M 转正=近端恐慌）</span></h3>
+  <div class="cards c3" id="credit-cards"></div>
 </section>
 
 <!-- ═══════════ ⑤ 美债收益率曲线 ═══════════ -->
@@ -235,6 +243,8 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="sec-desc" id="curve-desc">正常情况下长端高于短端；曲线倒挂（短高长低）往往预示衰退。短端体现政策意志，长端体现市场预期。</div>
   <div class="spread-grid" id="spread-cards"></div>
   <div class="chart mid" id="ch-curve"></div>
+  <h3 class="blk">关键期限矩阵 <span class="hint">当日 / 1周前 / 1月前 / 1年前 · 周变动 bp</span></h3>
+  <table class="matrix" id="curve-table"></table>
   <h3 class="blk">10Y 与 2Y 近一年走势 <span class="hint">财政部日度收益率</span></h3>
   <div class="chart" id="ch-hist"></div>
 </section>
@@ -258,7 +268,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 
 <!-- ═══════════ 页脚 ═══════════ -->
 <div class="foot">
-  <div>数据来源：Yahoo Finance（指数/ETF/个股行情）· U.S. Treasury Fiscal Data（债务总额、利息支出）· U.S. Treasury 日度收益率曲线（名义/实际）· NY Fed ACM（期限溢价）· FRED（GDP 等低频序列，维护期降级）</div>
+  <div>数据来源：Yahoo Finance（指数/ETF/个股行情、MOVE）· FRED（SOFR/EFFR/IORB、WALCL/WTREGEN/RRPONTSYD/WRESBAL、HY OAS、VIX3M）· U.S. Treasury 日度收益率曲线（名义/实际）· NY Fed ACM（期限溢价）</div>
   <ul class="caliber" id="caliber-notes"></ul>
   <div class="disc">本页为个人投研复盘工具，由数据管线自动生成，不构成投资建议。美股数据日期为美东交易日；快照于次日北京时间早晨生成，手动刷新时可能包含盘中未完结数据。</div>
 </div>
