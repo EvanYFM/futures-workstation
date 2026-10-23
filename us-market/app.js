@@ -83,7 +83,7 @@ function heatColor(p) {
 
 /* ══════════ ④ 美元流动性与风险偏好 ══════════ */
 function renderLiquidity(L, t, structure) {
-  const hideIds = ['fund-cards', 'ch-netliq', 'risk-cards', 'ch-styles', 'credit-cards'];
+  const hideIds = ['fund-cards', 'ch-netliq', 'risk-cards', 'xasset-cards', 'ch-styles', 'credit-cards'];
   const secH3 = document.getElementById('liq-desc').closest('section').querySelectorAll('h3.blk');
   if (!L) {
     hideIds.forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
@@ -136,6 +136,16 @@ function renderLiquidity(L, t, structure) {
       <div class="mini">${r.meaning}</div>
     </div>`).join('');
 
+  /* 跨资产确认：铜金比 / USD/JPY */
+  $('xasset-cards').innerHTML = (L.cross_asset || []).map(c => `
+    <div class="card">
+      <div class="k"><span>${c.name}</span>${stateChip(c.d20)}</div>
+      <div class="v num ${cls(c.d5)}">${fmt(c.value)}</div>
+      <div class="s num">5日 ${sgn(c.d5)}${fmt(c.d5)}% · 20日 ${sgn(c.d20)}${fmt(c.d20)}%</div>
+      ${sparkline(c.spark)}
+      <div class="mini">${c.meaning}</div>
+    </div>`).join('');
+
   const styles = L.styles || [];
   const styleChart = makeChart('ch-styles');
   if (styleChart) {
@@ -173,7 +183,7 @@ function renderLiquidity(L, t, structure) {
     (structure?.regime ? `<br><span style="color:var(--ink3)">结构判别（见⑤）：<b style="color:var(--ink2)">${structure.regime.label}</b>——风格差为负但宽度为正时，属权重股/AI 链拖累，不等于全市场避险。</span>` : '') +
     `</div>`;
 
-  const v = L.vol || {}, c = L.credit || {};
+  const v = L.vol || {}, c = L.credit || {}, pc = v.put_call || {};
   $('credit-cards').innerHTML = `
     <div class="card"><div class="k"><span>高收益债利差 HY OAS</span></div>
       <div class="v num">${fmt(c.hy_oas)}%</div>
@@ -183,7 +193,16 @@ function renderLiquidity(L, t, structure) {
       <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
     <div class="card"><div class="k"><span>VIX − VIX3M（期限结构）</span></div>
       <div class="v num ${cls(v.term)}">${sgn(v.term)}${fmt(v.term)}</div>
-      <div class="s">VIX ${fmt(v.vix)} / 3M ${fmt(v.vix3m)} · ${v.term != null && v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静'}</div></div>`;
+      <div class="s">VIX ${fmt(v.vix)} / 3M ${fmt(v.vix3m)} · ${v.term != null && v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静'}</div></div>
+    <div class="card"><div class="k"><span>SKEW（尾部风险定价）</span></div>
+      <div class="v num">${fmt(v.skew, 1)}</div>
+      <div class="s">${v.skew != null && v.skew > 145 ? '偏高 → 机构在买崩盘保护' : '常态区间'} · ${v.skew_date || '—'}</div></div>
+    <div class="card"><div class="k"><span>VVIX（波动率的波动率）</span></div>
+      <div class="v num">${fmt(v.vvix, 1)}</div>
+      <div class="s">${v.vvix != null && v.vvix > 100 ? '高企 → 波动预期不稳定' : '常态区间'} · ${v.vvix_date || '—'}</div></div>
+    <div class="card"><div class="k"><span>CBOE 全市场 Put/Call</span></div>
+      <div class="v num">${fmt(pc.total, 2)}</div>
+      <div class="s">指数 ${fmt(pc.index, 2)} / 股票 ${fmt(pc.equity, 2)} · 越高=看跌保护需求越强</div></div>`;
 }
 
 /* ══════════ ⑤ 结构判别与观察池 ══════════ */
