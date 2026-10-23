@@ -26,7 +26,7 @@
 
 - 日报流：trading-system `make daily` 生产 → build 输出 → data agent 同步公开仓（`data: publish` 提交）→ Pages 上线。
 - 复盘卡流：页面编辑 → localStorage/IndexedDB → journal-sync 推 futures-journal-data → 多设备合并拉回。
-- 首屏：fetch dashboard-meta.json → 最新 snapshot → 渲染；缓存戳 `?v=`（发布时替换为提交 SHA）。
+- 首屏：`index.html` head 内联预热 `dashboard-meta.json` → 最新 snapshot（写入 `window.__bootData`，必须在 `<link rel=stylesheet>` 之前）→ `app.js` 复用该结果渲染；预热失败返回 null，`app.js` 回退为自行 fetch。**首屏只等「索引 + 最新快照」**：`run-manifest.json`（仅在 meta 失效时兜底）与 `HistoryStore.init()`（IndexedDB + 3 个必 404 的 imported 探测）都在出图后并入，不阻塞 `#app[data-ready]`。最近 5 日历史快照在首屏后并发补齐。缓存戳 `?v=`（发布时替换为提交 SHA）。
 
 ## 4. 环境变量与密钥
 
