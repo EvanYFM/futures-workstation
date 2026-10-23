@@ -232,7 +232,11 @@ const HistoryStore = (() => {
     const silent404 = (label) => (error) => {
       if (!/HTTP 404/.test(String(error.message || ""))) errors.push(`${label}：${error.message}`);
     };
-    await Promise.all([
+    /* 公开站点上这三个文件必然 404（部署仓已排除 imported/，check_public_artifacts.py
+       主动拒绝），连请求都不必发：国内到 github.io 单 RTT 0.5~2s，白跑三个必失败请求
+       只会拖慢首屏后的补齐。只对公开域名跳过，本地开发/LAN/file:// 行为不变。 */
+    const isPublicSite = location.hostname === "evanyfm.github.io";
+    if (!isPublicSite) await Promise.all([
       fetchJson("data/imported/trading_log_excel.json")
         .then((excel) => { excelItems = (excel.observations || []).map(normalizeExcelObservation); })
         .catch(silent404("Excel 导入")),
