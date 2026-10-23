@@ -1497,25 +1497,28 @@ function preloadHistoricalSnapshots() {
   const missing = (state.data.dates || []).filter((date) => !state.data.snapshots[date]);
   return drain(missing.slice(0, 5));
 }
-const dashboardLoad = fetchWithRetry("data/dashboard-meta.json", {cache: "no-store"})
-  .then((meta) => fetchSnapshot(meta.latestDate).then((snapshot) => ({
+const dashboardLoad = (window.__bootData || Promise.resolve(null))
+  .then((boot) => boot || fetchWithRetry("data/dashboard-meta.json", {cache: "no-cache"})
+    .then((meta) => fetchSnapshot(meta.latestDate).then((snapshot) => ({meta, snapshot}))))
+  .then(({meta, snapshot}) => ({
     generatedAt: meta.generatedAt,
     dates: meta.dates,
     latestDate: meta.latestDate,
     snapshots: {[meta.latestDate]: snapshot},
-  })))
-  .catch(() => fetchWithRetry("run-manifest.json", {cache:"no-store"}).then((m)=>fetchSnapshot(m.latestDate).then((snapshot)=>({generatedAt:m.generatedAt,latestDate:m.latestDate,dates:m.snapshotDates,snapshots:{[m.latestDate]:snapshot}})))); /* 备用索引也按日读取，不再下载整包（2026-10-15: 同样改走超时重试） */
+  }))
+  .catch(() => fetchWithRetry("run-manifest.json", {cache:"no-cache"}).then((m)=>fetchSnapshot(m.latestDate).then((snapshot)=>({generatedAt:m.generatedAt,latestDate:m.latestDate,dates:m.snapshotDates,snapshots:{[m.latestDate]:snapshot}})))); /* 备用索引也按日读取，不再下载整包（2026-10-15: 同样改走超时重试） */
 
-Promise.all([
-  dashboardLoad,
-  fetchWithRetry("run-manifest.json", {cache: "no-store"}, 1).catch(() => null), /* 2026-10-15: 同样防流停滞卡死 Promise.all */
-  typeof HistoryStore !== "undefined" ? HistoryStore.init().catch((error) => ({observations: [], trades: [], narratives: [], months: [], errors: [String(error.message || error)]})) : Promise.resolve(null),
-])
-  .then(([data, manifest, history]) => {
+/* 首屏只等「索引 + 最新快照」。个人复盘库(IndexedDB + 3 个导入探测)与 run-manifest
+   (只在 meta 失效时才用得上)不再阻塞首屏，改为首屏出图后并入。 */
+const historyLoad = typeof HistoryStore !== "undefined"
+  ? HistoryStore.init().catch((error) => ({observations: [], trades: [], narratives: [], months: [], errors: [String(error.message || error)]}))
+  : Promise.resolve(null);
+
+dashboardLoad
+  .then((data) => {
     state.data = data;
-    state.manifest = manifest;
     state.date = data.latestDate;
-    state.history = history || {observations: [], trades: [], narratives: [], months: [], errors: []};
+    state.history = {observations: [], trades: [], narratives: [], months: [], errors: []};
     state.activeSymbol = data.snapshots[data.latestDate].tripleResonance[0]?.symbol || data.snapshots[data.latestDate].instruments[0]?.symbol;
     bindEvents();
     renderAll();
@@ -1532,8 +1535,13 @@ Promise.all([
         .catch(() => { const el = document.getElementById("cloudSyncStatus"); if (el) el.textContent = "● 同步失败，点右侧按钮重试"; });
     }
     $("#app").dataset.ready = "true";
-    /* 首屏已出：后台补齐其余历史快照（串行），补完后重渲染一次填充序列图/5日涨跌；
-       decisions 视图含表单，避免重渲染清空输入，留给下次切换视图时自然取数 */
+    /* 首屏已出，后台链并行推进，各自只做最小重渲染 */
+    historyLoad.then((history) => {
+      state.history = history || {observations: [], trades: [], narratives: [], months: [], errors: []};
+      renderDecisionView();
+      renderHistoryView();
+      renderCloudSyncStatus();
+    });
     preloadHistoricalSnapshots().then(() => { if (state.view !== "decisions") renderAll(); });
   })
   .catch((error) => {

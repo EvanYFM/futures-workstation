@@ -196,7 +196,7 @@ const HistoryStore = (() => {
   }
 
   async function fetchJson(path) {
-    const response = await fetch(path, {cache: "no-store"});
+    const response = await fetch(path, {cache: "no-cache"});
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
     return response.json();
   }

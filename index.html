@@ -25,7 +25,29 @@
     - 设计 token 见 styles-v2.css 头部;旧版配色变量在此处做别名映射(--bull→--up 等)
     - 字体走系统栈(--serif/--sans 已含 PingFang/雅黑回退),不请求外网字体,国内首屏无阻塞
   -->
-  <link rel="stylesheet" href="./styles-v2.css?v=20261013-cta-focus2">
+  <!--
+    首屏数据预热(2026-10-23):head 解析到这里就把「索引 -> 最新快照」两跳发出去,与 CSS/JS 下载并行。
+    必须放在下面的 <link rel=stylesheet> 之前——内联脚本会被未完成的样式表阻塞执行,放后面等于没预热。
+    app.js 启动后直接复用 window.__bootData,省掉两整跳串行往返(国内到 github.io 单跳 0.5~2s)。
+    失败时返回 null,app.js 自动回退到原来的 fetchWithRetry 路径,不影响可用性。
+  -->
+  <script>
+    window.__bootData = (function () {
+      function getJson(url) {
+        return fetch(url, {cache: "no-cache"}).then(function (r) {
+          if (!r.ok) throw new Error(url + " " + r.status);
+          return r.json();
+        });
+      }
+      return getJson("./data/dashboard-meta.json")
+        .then(function (meta) {
+          return getJson("./data/snapshots/" + meta.latestDate + ".json")
+            .then(function (snapshot) { return {meta: meta, snapshot: snapshot}; });
+        })
+        .catch(function () { return null; });
+    })();
+  </script>
+  <link rel="stylesheet" href="./styles-v2.css?v=20261023-fastboot">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">
@@ -293,7 +315,7 @@
         })();
         /* A股子站数据状态面板 */
         (function () {
-          fetch('./a-share/data/dashboard-meta.json', { cache: 'no-store' })
+          fetch('./a-share/data/dashboard-meta.json', { cache: 'no-cache' })
             .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
             .then(function (m) {
               var el = document.getElementById('ashareStatusPanel');
@@ -327,7 +349,7 @@
         })();
         /* 美股美债子站数据状态面板 */
         (function () {
-          fetch('./us-market/data/dashboard-meta.json', { cache: 'no-store' })
+          fetch('./us-market/data/dashboard-meta.json', { cache: 'no-cache' })
             .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
             .then(function (m) {
               var el = document.getElementById('usmarketStatusPanel');
@@ -432,10 +454,10 @@
       });
     })();
   </script>
-  <script src="./history-store.js?v=20261014-startup" defer></script>
-  <script src="./journal-sync.js?v=20261014-startup" defer></script>
-  <script src="./focus-technical-data.js?v=20261013-cta-focus2"></script>
-  <script src="./focus-technical.js?v=20261013-cta-focus2"></script>
-  <script src="./app.js?v=20261021-core-trim" defer></script>
+  <script src="./history-store.js?v=20261023-fastboot" defer></script>
+  <script src="./journal-sync.js?v=20261023-fastboot" defer></script>
+  <script src="./focus-technical-data.js?v=20261023-fastboot" defer></script>
+  <script src="./focus-technical.js?v=20261023-fastboot" defer></script>
+  <script src="./app.js?v=20261023-fastboot" defer></script>
 </body>
 </html>
