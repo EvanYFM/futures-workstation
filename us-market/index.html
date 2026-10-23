@@ -20,8 +20,8 @@
 </script>
 <title>美股与美债复盘仪表盘</title>
 <!-- 设计体系与 a-share 子站同源（纸白/墨黑/朱砂、红涨绿跌、系统字体栈零外网依赖）;
-     echarts 本地托管 + defer, 与 a-share 同一份字节 -->
-<script defer src="./assets/echarts.min.js"></script>
+     echarts 本地托管 + defer, 与 a-share 共用根 assets/ 同一份字节（2026-10-23 起不再各存一份） -->
+<script defer src="../assets/echarts.min.js"></script>
 <style>
 :root{
   --ink:#37352f; --ink2:#787774; --ink3:#9b9a97;
@@ -82,6 +82,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .cards.c4{grid-template-columns:repeat(4,1fr)}
 .cards.c3{grid-template-columns:repeat(3,1fr)}
 .cards.c5{grid-template-columns:repeat(5,1fr)}
+.cards.c2{grid-template-columns:repeat(2,1fr)}
 @media(max-width:900px){.cards.c4,.cards.c5{grid-template-columns:repeat(2,1fr)}.cards.c3{grid-template-columns:1fr}}
 .card{border:1px solid var(--line2);border-radius:6px;padding:14px 16px;background:transparent;transition:border-color .15s}
 .card:hover{border-color:var(--hover)}
@@ -228,6 +229,9 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 
   <h3 class="blk">风险偏好温度计 <span class="hint">比值走强=偏进攻 · 迷你走势为近20日</span></h3>
   <div class="cards c5" id="risk-cards"></div>
+
+  <h3 class="blk">跨资产确认 <span class="hint">铜金比（增长 vs 避险）· USD/JPY（套息压力）</span></h3>
+  <div class="cards c2" id="cross-cards"></div>
 
   <h3 class="blk">风格轮动：防御 / 周期 / 成长 <span class="hint">11只SPDR等权分组 · 5日与20日涨跌</span></h3>
   <div class="chart small" id="ch-styles"></div>

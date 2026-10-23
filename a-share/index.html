@@ -21,8 +21,9 @@
 <title>A股行业轮动与资金流向监控仪表盘</title>
 <!-- 字体走系统栈(同主站 styles-v2.css 口径),不请求外网字体,国内首屏无阻塞;
      echarts 本地托管(2026-10-14),不再依赖 jsdelivr CDN;
-     defer: 1MB echarts 不再阻塞文档解析(2026-10-15, 修 iframe 内"子站加载中"卡死) -->
-<script defer src="./assets/echarts.min.js"></script>
+     defer: 1MB echarts 不再阻塞文档解析(2026-10-15, 修 iframe 内"子站加载中"卡死);
+     2026-10-23 起与 us-market 共用根 assets/ 同一份,不再各存一份 -->
+<script defer src="../assets/echarts.min.js"></script>
 <style>
 :root{
   --ink:#37352f; --ink2:#787774; --ink3:#9b9a97;
