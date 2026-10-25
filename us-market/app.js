@@ -83,7 +83,7 @@ function heatColor(p) {
 
 /* ══════════ ④ 美元流动性与风险偏好 ══════════ */
 function renderLiquidity(L, t, structure) {
-  const hideIds = ['fund-cards', 'ch-netliq', 'risk-cards', 'xasset-cards', 'ch-styles', 'credit-cards'];
+  const hideIds = ['fund-cards', 'ch-netliq', 'netliq-note', 'risk-cards', 'xasset-cards', 'ch-styles', 'credit-cards'];
   const secH3 = document.getElementById('liq-desc').closest('section').querySelectorAll('h3.blk');
   if (!L) {
     hideIds.forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
@@ -124,6 +124,10 @@ function renderLiquidity(L, t, structure) {
     $('liq-desc').innerHTML =
       `净流动性 <b>$${(b.net_liquidity_bn / 1000).toFixed(2)} 万亿</b>（联储总资产 $${(b.walcl.value_bn / 1000).toFixed(2)}T − TGA $${(b.tga ? b.tga.value_bn / 1000 : 0).toFixed(2)}T − RRP $${b.rrp ? b.rrp.value_bn : 0}B）。` +
       `四层观察：资金价格 → 数量 → 信用与波动 → 风险偏好。`;
+    const dn = b.dates || {};
+    $('netliq-note').innerHTML =
+      `时点：WALCL ${dn.walcl || '—'} · TGA ${dn.tga || '—'} · RRP ${dn.rrp || '—'} · 准备金 ${dn.reserves || '—'}` +
+      (b.note ? ` · ${b.note}` : '');
   }
 
   const ratios = L.ratios || [];
@@ -170,17 +174,26 @@ function renderLiquidity(L, t, structure) {
   const verdictText = st === 'risk-off'
     ? (regimeCode === 'structural-deai'
         ? '结构性收缩：去 AI 敞口，而非全面避险'
-        : '风险偏好收缩：资金撤离成长/科技，转向防御与必需消费')
+        : regimeCode === 'mixed-pullback'
+          ? '风格偏防守，但当日结构出现分化'
+          : '风险偏好收缩：资金撤离成长/科技，转向防御与必需消费')
     : st === 'risk-on'
       ? (regimeCode === 'narrow-rally' ? '窄幅抱团：指数上涨由少数权重股拉动' : '风险偏好扩张：成长/科技占优，防御落后')
       : '风格中性：成长与防御差距不显著';
+  const regimeRef = {
+    'structural-deai': '指数跌但等权涨——抛压集中在权重/AI 链，不等于全市场避险。',
+    'mixed-pullback': '指数与等权同跌，但 AI 链或 ≥3 个板块逆势——属分化回落，不是全市场同向失血。',
+    'broad-riskoff': '指数与等权同跌且逆势板块稀少——接近全市场抛售。',
+    'broad-riskon': '指数与等权同涨——上涨扩散。',
+    'narrow-rally': '指数涨但等权落后——少数权重股拉动。',
+  }[regimeCode];
   $('liq-verdict').innerHTML =
     `<div class="sb-t">${st === 'risk-off' ? '▼' : st === 'risk-on' ? '▲' : '•'} ${verdictText}</div>
      <div class="sb-b">成长 − 防御：近5日 <b>${sgn(rot.growth_minus_defensive_5d)}${fmt(rot.growth_minus_defensive_5d)}pp</b> ·
      近20日 <b>${sgn(rot.growth_minus_defensive_20d)}${fmt(rot.growth_minus_defensive_20d)}pp</b>（pp 为百分点差，负值=防御跑赢）。
      配合 <b>科技/必需消费比值</b>近5日 ${sgn(ratios.find(r => r.key === 'tech_defensive')?.d5)}${fmt(ratios.find(r => r.key === 'tech_defensive')?.d5)}%、
      <b>等权/市值权</b> ${sgn(ratios.find(r => r.key === 'breadth')?.d5)}${fmt(ratios.find(r => r.key === 'breadth')?.d5)}% 交叉验证资金去向。` +
-    (structure?.regime ? `<br><span style="color:var(--ink3)">结构判别（见⑤）：<b style="color:var(--ink2)">${structure.regime.label}</b>——风格差为负但宽度为正时，属权重股/AI 链拖累，不等于全市场避险。</span>` : '') +
+    (structure?.regime ? `<br><span style="color:var(--ink3)">结构判别（见⑤）：<b style="color:var(--ink2)">${structure.regime.label}</b>——${regimeRef || structure.regime.desc || ''}</span>` : '') +
     `</div>`;
 
   const v = L.vol || {}, c = L.credit || {}, pc = v.put_call || {};
@@ -192,8 +205,8 @@ function renderLiquidity(L, t, structure) {
       <div class="v num">${fmt(v.move, 1)}</div>
       <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
     <div class="card"><div class="k"><span>VIX − VIX3M（期限结构）</span></div>
-      <div class="v num ${cls(v.term)}">${sgn(v.term)}${fmt(v.term)}</div>
-      <div class="s">VIX ${fmt(v.vix)} / 3M ${fmt(v.vix3m)} · ${v.term != null && v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静'}</div></div>
+      <div class="v num ${v.term == null ? '' : cls(v.term)}">${v.term == null ? '—' : sgn(v.term) + fmt(v.term)}</div>
+      <div class="s">VIX ${fmt(v.vix)}（${v.vix_date || '—'}）/ 3M ${fmt(v.vix3m)}（${v.vix3m_date || '—'}）· ${v.term == null ? (v.term_note || '日期不一致，不判断') : (v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静')}</div></div>
     <div class="card"><div class="k"><span>SKEW（尾部风险定价）</span></div>
       <div class="v num">${fmt(v.skew, 1)}</div>
       <div class="s">${v.skew != null && v.skew > 145 ? '偏高 → 机构在买崩盘保护' : '常态区间'} · ${v.skew_date || '—'}</div></div>
@@ -215,25 +228,27 @@ function renderStructure(S, t) {
   }
   const ix = S.index || {}, ai = S.ai_chain || {}, na = S.non_ai || {}, disp = S.dispersion || {}, rg = S.regime || {};
   const quad = [
-    { code: 'structural-deai', t: '指数↓ / 宽度↑', n: '结构性去AI' },
-    { code: 'broad-riskoff', t: '指数↓ / 宽度↓', n: '全面避险' },
-    { code: 'broad-riskon', t: '指数↑ / 宽度↑', n: '全面 risk-on' },
-    { code: 'narrow-rally', t: '指数↑ / 宽度↓', n: '窄幅抱团' },
+    { code: 'structural-deai', t: '指数↓ / 等权↑', n: '结构性去AI' },
+    { code: 'mixed-pullback', t: '指数↓ / 同跌但分化', n: '分化回落' },
+    { code: 'broad-riskoff', t: '指数↓ / 同跌且普跌', n: '全面避险' },
+    { code: 'broad-riskon', t: '指数↑ / 等权↑', n: '全面 risk-on' },
+    { code: 'narrow-rally', t: '指数↑ / 等权落后', n: '窄幅抱团' },
   ];
   $('regime-box').innerHTML =
     `<div class="sb-t">当前结构：${rg.label || '—'}</div>
      <div class="sb-b">${rg.desc || ''} · 数据日期 ${S.as_of || '—'}</div>
      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
-       ${quad.map(q => `<div style="font-size:11.5px;padding:6px 10px;border:1px solid ${q.code === rg.code ? 'var(--ink)' : 'var(--line)'};border-radius:4px;background:${q.code === rg.code ? 'var(--softbg)' : 'transparent'};color:${q.code === rg.code ? 'var(--ink)' : 'var(--ink3)'}">
+       ${quad.map((q, i) => `<div style="font-size:11.5px;padding:6px 10px;border:1px solid ${q.code === rg.code ? 'var(--ink)' : 'var(--line)'};border-radius:4px;background:${q.code === rg.code ? 'var(--softbg)' : 'transparent'};color:${q.code === rg.code ? 'var(--ink)' : 'var(--ink3)'};${quad.length % 2 === 1 && i === quad.length - 1 ? 'grid-column:span 2;' : ''}">
          <b>${q.n}</b> · ${q.t}</div>`).join('')}
      </div>`;
+  $('breadth-note').textContent = S.breadth_note || '';
   $('struct-cards').innerHTML = `
     <div class="card"><div class="k"><span>标普500（市值权）</span></div>
       <div class="v num ${cls(ix.spx_d1)}">${sgn(ix.spx_d1)}${fmt(ix.spx_d1)}%</div>
       <div class="s">SPY ${sgn(ix.spy_d1)}${fmt(ix.spy_d1)}%</div></div>
     <div class="card"><div class="k"><span>标普等权 RSP</span></div>
       <div class="v num ${cls(ix.rsp_d1)}">${sgn(ix.rsp_d1)}${fmt(ix.rsp_d1)}%</div>
-      <div class="s">等权 − 市值权：<b class="${cls(ix.spread)}">${sgn(ix.spread)}${fmt(ix.spread)}pp</b></div></div>
+      <div class="s">等权 − 市值权：<b class="${cls(ix.spread)}">${sgn(ix.spread)}${fmt(ix.spread)}pp</b>${ix.sector_up != null ? ` · 板块上涨 ${ix.sector_up}/${ix.sector_total}` : ''}</div></div>
     <div class="card"><div class="k"><span>AI 链等权篮子</span></div>
       <div class="v num ${cls(ai.basket_d1)}">${sgn(ai.basket_d1)}${fmt(ai.basket_d1)}%</div>
       <div class="s">相对标普 <b class="${cls(ai.vs_spx_d1)}">${sgn(ai.vs_spx_d1)}${fmt(ai.vs_spx_d1)}pp</b> · 非AI 8行业 ${sgn(na.basket_d1)}${fmt(na.basket_d1)}%</div></div>
@@ -346,13 +361,14 @@ function renderAll(DATA) {
   const roll = DATA.sectors?.roll;
   const rollChart = makeChart('ch-roll');
   if (rollChart && roll && roll.rows.length) {
+    // 5 日累计用复利（管线已给 cum）；缺失时退化为累加，仅作排序兜底
     const rows = [...roll.rows].map(r => ({
-      ...r, sum: r.cells.reduce((a, v) => a + (v || 0), 0)
-    })).sort((a, b) => b.sum - a.sum);
+      ...r, rank: r.cum != null ? r.cum : r.cells.reduce((a, v) => a + (v || 0), 0)
+    })).sort((a, b) => b.rank - a.rank);
     const data = [];
     rows.forEach((r, y) => r.cells.forEach((v, x) => data.push([x, y, v])));
     rollChart.setOption({
-      tooltip: { ...TIP, formatter: p => `${rows[p.value[1]].name} ${roll.dates[p.value[0]]}<br>${p.value[2] == null ? '—' : sgn(p.value[2]) + fmt(p.value[2]) + '%'}` },
+      tooltip: { ...TIP, formatter: p => `${rows[p.value[1]].name} ${roll.dates[p.value[0]]}<br>${p.value[2] == null ? '—' : sgn(p.value[2]) + fmt(p.value[2]) + '%'}<br><span style="opacity:.7">5日累计（复利）${rows[p.value[1]].cum == null ? '—' : sgn(rows[p.value[1]].cum) + fmt(rows[p.value[1]].cum) + '%'}</span>` },
       grid: { left: 70, right: 20, top: 10, bottom: 30 },
       xAxis: { type: 'category', data: roll.dates.map(d => d.slice(5)), ...AX },
       yAxis: { type: 'category', data: rows.map(r => r.name), ...AX },
@@ -501,15 +517,15 @@ function renderAll(DATA) {
       <div class="card"><div class="k"><span>名义 10Y</span></div>
         <div class="v num">${fmt(R.curve.values[R.curve.tenors.indexOf('10 Yr')])}%</div>
         <div class="s">财政部日度 · ${R.curve.date}</div></div>
-      <div class="card"><div class="k"><span>实际利率（10Y TIPS）</span></div>
+      <div class="card"><div class="k"><span>实际利率（视角A）</span></div>
         <div class="v num">${fmt(R.real10)}%</div>
-        <div class="s">实体经济回报的判断</div></div>
-      <div class="card"><div class="k"><span>通胀预期（Breakeven）</span></div>
+        <div class="s">10Y TIPS · 含实际回报预期与流动性/风险溢价</div></div>
+      <div class="card"><div class="k"><span>盈亏平衡通胀（视角A）</span></div>
         <div class="v num">${fmt(R.breakeven10)}%</div>
-        <div class="s">名义 − 实际，市场对未来 CPI 路径的定价</div></div>
-      <div class="card"><div class="k"><span>期限溢价（ACM）</span></div>
+        <div class="s">名义 − 实际 · 含通胀预期与风险溢价</div></div>
+      <div class="card"><div class="k"><span>期限溢价（视角B）</span></div>
         <div class="v num">${tp10 ? sgn(tp10.value) + fmt(tp10.value) + '%' : '—'}</div>
-        <div class="s">${tp10 ? 'NY Fed ACM · ' + tp10.date : 'ACM 获取失败'}</div></div>`;
+        <div class="s">${tp10 ? 'NY Fed ACM · ' + tp10.date + ' · 不与前三项相加' : 'ACM 获取失败'}</div></div>`;
     const fh = R.factor_hist || {};
     const fc = makeChart('ch-factors');
     if (fc && fh.nominal?.length) {
@@ -534,9 +550,9 @@ function renderAll(DATA) {
         moves.sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]));
         const [nm, mv] = moves[0];
         $('factor-desc').innerHTML =
-          `近5日 10Y 变动的主导因子：<b>${nm}</b>（${sgn(mv)}${(mv * 100).toFixed(0)}bp）。` +
-          `名义利率 ≈ 实际利率 + 通胀预期；期限溢价（ACM ${tp10 ? sgn(tp10.value) + fmt(tp10.value) + '%' : '—'}）是嵌入其中的风险补偿。` +
-          `${nm === '实际利率' ? '实际利率主导 → 市场对实体经济回报的判断在变。' : '通胀预期主导 → 市场在重估 CPI 路径（关税/油价/数据）。'}`;
+          `视角 A 的近 5 日主导项：<b>${nm}</b>（${sgn(mv)}${(mv * 100).toFixed(0)}bp）。名义 = 实际 + 盈亏平衡是恒等式；` +
+          `期限溢价（ACM ${tp10 ? sgn(tp10.value) + fmt(tp10.value) + '%' : '—'}）属视角 B 的模型分解，<b>不与前两项相加</b>。` +
+          `${nm === '实际利率' ? '实际利率变动可能反映实际回报预期，也含流动性与风险溢价变化，需结合 TIPS 流动性观察。' : '盈亏平衡变动可能反映通胀预期，也含通胀风险溢价与流动性因素。'}`;
       }
     }
   }
@@ -545,7 +561,7 @@ function renderAll(DATA) {
   if (DATA.calls && DATA.calls.cards) {
     $('calls-body').innerHTML =
       `<div class="call-cards">${DATA.calls.cards.map(c => `
-        <div class="call-card"><span class="cc-tag ${c.cls}">${c.tag}</span>
+        <div class="call-card"><span class="cc-tag ${c.cls}">${c.tag}</span>${c.h ? `<span class="cc-h">${c.h}</span>` : ''}
         <div class="cc-t">${c.t}</div><div class="cc-b">${c.b}</div><div class="cc-e">${c.e}</div></div>`).join('')}</div>` +
       (DATA.calls.sig ? `<div class="sig-box"><div class="sb-t">${DATA.calls.sig.t}</div><div class="sb-b">${DATA.calls.sig.b}</div></div>` : '');
   }

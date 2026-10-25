@@ -139,6 +139,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 @media(max-width:900px){.call-cards{grid-template-columns:1fr}}
 .call-card{border:1px solid var(--line2);border-radius:6px;padding:16px 18px}
 .call-card .cc-tag{display:inline-block;font-size:11.5px;font-weight:600;border-radius:3px;padding:2px 9px;margin-bottom:9px;letter-spacing:.5px}
+.call-card .cc-h{display:inline-block;font-size:10.5px;color:var(--ink3);border:1px solid var(--line2);border-radius:3px;padding:1px 6px;margin-left:6px;vertical-align:2px}
 .cc-tag.over{background:var(--upbg);color:var(--up);border:1px solid rgba(212,76,71,.35)}
 .cc-tag.watch{background:rgba(35,131,226,0.08);color:var(--accent);border:1px solid rgba(35,131,226,.35)}
 .cc-tag.reduce{background:var(--downbg);color:var(--down);border:1px solid rgba(15,123,108,.35)}
@@ -227,6 +228,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 
   <h3 class="blk">流动性数量：净流动性 = 联储总资产 − TGA − 隔夜逆回购 <span class="hint">FRED WALCL / WTREGEN / RRPONTSYD · 十亿美元</span></h3>
   <div class="chart" id="ch-netliq"></div>
+  <div class="mini" id="netliq-note" style="margin:-4px 0 6px;color:var(--ink3);font-size:11.5px"></div>
 
   <h3 class="blk">风险偏好温度计 <span class="hint">比值走强=偏进攻 · 迷你走势为近20日</span></h3>
   <div class="cards c5" id="risk-cards"></div>
@@ -245,7 +247,8 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 <!-- ═══════════ ⑤ 结构判别与观察池 ═══════════ -->
 <section>
   <div class="sec-head"><h2>⑤ 结构判别与观察池</h2><span class="tag">De-AI Rotation &amp; Watchlist</span></div>
-  <div class="sec-desc" id="struct-desc">指数下跌 ≠ 全面避险。用「指数层（市值权）× 宽度层（等权−市值权）」二分：<b>指数跌 + 等权涨 = 结构性去AI</b>（抛压集中于权重/AI 链）；两者同跌才是全面避险；指数涨而等权落后则是窄幅抱团。再用 AI 链/非AI 链等权差、z≥2 离散度与观察池交叉验证。</div>
+  <div class="sec-desc" id="struct-desc">指数下跌 ≠ 全面避险。用「指数层（市值权）× 相对结构（等权−市值权）」二分：<b>指数跌 + 等权涨 = 结构性去AI</b>；同跌但 AI 链或 ≥3 个板块逆势 = <b>分化回落</b>；只有同跌且逆势板块稀少才是全面避险。再用 AI 链/非AI 链等权差、z≥2 离散度与观察池交叉验证。</div>
+  <div class="mini" id="breadth-note" style="color:var(--ink3);font-size:11.5px;margin:-10px 0 14px"></div>
   <div class="sig-box" id="regime-box"></div>
   <div class="cards c4" id="struct-cards"></div>
   <h3 class="blk">观察池：防御/红利/实物 vs AI/进攻 <span class="hint">按你的盯盘清单 · 1/5/20日涨跌 + 相对标普20日</span></h3>
@@ -266,10 +269,10 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="chart" id="ch-hist"></div>
 </section>
 
-<!-- ═══════════ ⑦ 10Y 三因子分解 ═══════════ -->
+<!-- ═══════════ ⑦ 10Y 利率分解（两套视角） ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑦ 10Y 三因子分解</h2><span class="tag">Nominal = Real + Breakeven + Term Premium</span></div>
-  <div class="sec-desc" id="factor-desc">名义利率 ≈ 实际利率（TIPS）+ 通胀预期（Breakeven）；期限溢价（NY Fed ACM）是嵌入其中的「未来风险补偿」。每一次 10Y 变动，先拆开看是哪一块在动。</div>
+  <div class="sec-head"><h2>⑦ 10Y 利率分解（两套视角）</h2><span class="tag">TIPS Breakeven vs ACM Term Premium</span></div>
+  <div class="sec-desc" id="factor-desc">两套分解<b>不能相加</b>，否则重复计算：<b>视角 A（恒等式）</b>名义 = 实际利率（TIPS）+ 盈亏平衡通胀；<b>视角 B（模型）</b>名义 ≈ 预期短端利率路径 + 期限溢价（NY Fed ACM）。前者拆分「买的是通胀还是实际回报」，后者回答「长端多付了多少不确定性补偿」。</div>
   <div class="cards c4" id="factor-cards"></div>
   <div class="chart" id="ch-factors"></div>
 </section>
@@ -288,6 +291,7 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div>数据来源：Yahoo Finance（指数/ETF/个股行情、MOVE）· FRED（SOFR/EFFR/IORB、WALCL/WTREGEN/RRPONTSYD/WRESBAL、HY OAS、VIX3M）· U.S. Treasury 日度收益率曲线（名义/实际）· NY Fed ACM（期限溢价）</div>
   <ul class="caliber" id="caliber-notes"></ul>
   <div class="disc">本页为个人投研复盘工具，由数据管线自动生成，不构成投资建议。美股数据日期为美东交易日；快照于次日北京时间早晨生成，手动刷新时可能包含盘中未完结数据。</div>
+  <div class="disc"><b>方法与局限</b>：① 当前长于价格与金融条件，<b>弱于盈利、估值与事件驱动</b>——AI 股下跌无法区分盈利预期下修、估值压缩、资本开支回报担忧与持仓调整，需补财报/指引与盈利预测修正；② <b>无完整市场广度</b>（成分股上涨比例、50/200 日均线上方占比、新高新低），RSP−SPY 仅为相对结构线索；③ 净流动性为代理指标，不等于银行准备金或股市资金流；④ 缺事件日历（FOMC/CPI/国债拍卖/财报），研判只基于已发生的价格与流动性。补齐上述四项前，结论应视为「结构性判断」而非「因果结论」。</div>
 </div>
 
 </div>
