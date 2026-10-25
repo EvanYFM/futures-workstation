@@ -300,6 +300,96 @@ function avg(arr) {
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
 }
 
+/* ══════════ ⑥ 真实广度 · 估值 · 事件 ══════════ */
+function renderBreadthValuation(DATA, t) {
+  const B = DATA.breadth, V = DATA.valuation, E = DATA.events;
+  if (!B && !V && !E) {
+    $('bv-desc').innerHTML = '该快照为旧版结构，不含广度/估值/事件模块（20261023 起启用）。';
+    ['breadth-cards', 'ch-breadth', 'val-cards', 'ch-pe', 'event-table'].forEach(id => {
+      const el = $(id); if (el) el.style.display = 'none';
+    });
+    return;
+  }
+  if (B) {
+    const advPct = B.adv_ratio;
+    $('breadth-cards').innerHTML = `
+      <div class="card"><div class="k"><span>上涨 / 下跌家数</span></div>
+        <div class="v num"><span class="up">${B.adv}</span> / <span class="down">${B.dec}</span></div>
+        <div class="s">上涨占 ${fmt(advPct, 1)}% · 平盘 ${B.flat} 只 · 覆盖 ${B.covered}/${B.universe}</div></div>
+      <div class="card"><div class="k"><span>20 日均线上方</span></div>
+        <div class="v num">${fmt(B.pct_above_20, 1)}%</div>
+        <div class="s">短期广度：>60% 偏强、<40% 偏弱</div></div>
+      <div class="card"><div class="k"><span>50 日均线上方</span></div>
+        <div class="v num">${fmt(B.pct_above_50, 1)}%</div>
+        <div class="s">中期广度</div></div>
+      <div class="card"><div class="k"><span>200 日均线上方</span></div>
+        <div class="v num">${fmt(B.pct_above_200, 1)}%</div>
+        <div class="s">长期趋势参与度</div></div>
+      <div class="card"><div class="k"><span>52 周新高 / 新低</span></div>
+        <div class="v num"><span class="up">${B.hi_52w}</span> / <span class="down">${B.lo_52w}</span></div>
+        <div class="s">${B.date} · ${B.note}</div></div>`;
+    const bc = makeChart('ch-breadth');
+    if (bc) {
+      const labels = ['上涨占比', '20日线上方', '50日线上方', '200日线上方'];
+      const vals = [advPct, B.pct_above_20, B.pct_above_50, B.pct_above_200];
+      bc.setOption({
+        tooltip: { ...TIP, valueFormatter: v => v == null ? '—' : v + '%' },
+        grid: { left: 96, right: 40, top: 12, bottom: 20 },
+        xAxis: { type: 'value', max: 100, ...AX },
+        yAxis: { type: 'category', data: labels, ...AX },
+        series: [{ type: 'bar', barMaxWidth: 22,
+          data: vals.map(v => ({ value: v, itemStyle: { color: t.gold, opacity: 0.75 } })),
+          label: { show: true, position: 'right', fontSize: 11, color: t.text,
+                   formatter: p => p.value == null ? '—' : p.value.toFixed(1) + '%' },
+          markLine: { silent: true, symbol: 'none', label: { show: false },
+            lineStyle: { color: t.split, type: 'dashed' },
+            data: [{ xAxis: 50 }] } }]
+      });
+    }
+  }
+  if (V) {
+    $('val-cards').innerHTML = `
+      <div class="card"><div class="k"><span>标普500 滚动 PE</span></div>
+        <div class="v num">${fmt(V.pe)}</div>
+        <div class="s">${V.pe_date} · 10 年分位 <b>${fmt(V.pe_pct10y, 0)}%</b></div></div>
+      <div class="card"><div class="k"><span>盈利收益率（1/PE）</span></div>
+        <div class="v num">${fmt(V.earnings_yield)}%</div>
+        <div class="s">股票的「现金回报率」，与债息直接比较</div></div>
+      <div class="card"><div class="k"><span>10Y 实际利率</span></div>
+        <div class="v num">${fmt(V.real10)}%</div>
+        <div class="s">无风险实际回报基准</div></div>
+      <div class="card"><div class="k"><span>ERP（股债相对吸引力）</span></div>
+        <div class="v num ${cls(V.erp_vs_real)}">${fmt(V.erp_vs_real)}pp</div>
+        <div class="s">盈利收益率 − 实际利率；越低=股票相对越贵</div></div>`;
+    const pc = makeChart('ch-pe');
+    if (pc && V.hist?.length) {
+      pc.setOption({
+        tooltip: { ...TIP, trigger: 'axis', valueFormatter: v => v == null ? '—' : v },
+        grid: { left: 44, right: 20, top: 14, bottom: 24 },
+        xAxis: { type: 'category', data: V.hist.map(p => p.date), ...AX },
+        yAxis: { type: 'value', scale: true, ...AX },
+        series: [{ type: 'line', data: V.hist.map(p => p.pe), showSymbol: false,
+          lineStyle: { color: t.gold, width: 1.6 }, areaStyle: { color: t.gold, opacity: 0.06 },
+          markLine: { silent: true, symbol: 'none', label: { show: false },
+            lineStyle: { color: t.split, type: 'dashed' },
+            data: [{ yAxis: V.pe, lineStyle: { color: t.ink, type: 'dotted' } }] } }]
+      });
+    }
+  }
+  if (E && E.items?.length) {
+    const typeName = { fomc: 'FOMC', macro: '数据', auction: '拍卖', earnings: '财报' };
+    $('event-table').innerHTML =
+      '<tr><th>日期</th><th>类型</th><th>事件</th><th>细节</th></tr>' +
+      E.items.map(x => `<tr>
+        <td>${x.date.slice(5)}</td>
+        <td><span class="evt ${x.type}">${typeName[x.type] || x.type}</span></td>
+        <td>${x.label}</td>
+        <td style="text-align:left;color:var(--ink2)">${x.detail}${x.time ? ' · ' + x.time : ''}</td></tr>`).join('');
+  } else {
+    $('event-table').innerHTML = '<tr><td style="color:var(--ink3)">未来两周无已公布日程</td></tr>';
+  }
+}
+
 /* ══════════ 渲染主流程 ══════════ */
 function renderAll(DATA) {
   LAST = DATA;
@@ -435,6 +525,8 @@ function renderAll(DATA) {
   renderLiquidity(DATA.liquidity, t, DATA.structure);
   /* ⑤ 结构判别与观察池 */
   renderStructure(DATA.structure, t);
+  /* ⑥ 真实广度 · 估值 · 事件 */
+  renderBreadthValuation(DATA, t);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
