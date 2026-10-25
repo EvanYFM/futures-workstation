@@ -86,7 +86,7 @@ $('idx-cards').innerHTML = DATA.indices.map(r => `
   <div class="card">
     <div class="k"><span>${r.name}</span><span class="${cls(r.pct)} num">${sgn(r.pct)}${fmt(r.pct)}%</span></div>
     <div class="v num">${fmt(r.close)}</div>
-    <div class="s num">成交 ${r.turnover.toLocaleString()} 亿元${r.high ? ` · 日内振幅 ${r.high}/${r.low}` : ''}</div>
+    <div class="s num">成交 ${r.turnover && r.turnover > 1 ? r.turnover.toLocaleString() : '—'} 亿元${r.high ? ` · 日内振幅 ${r.high}/${r.low}` : ''}</div>
   </div>`).join('');
 
 /* ── 涨跌家数 ── */
@@ -165,7 +165,7 @@ $('broad-cards').innerHTML = DATA.broad_styles.map(b => `
     <div class="k"><span>${b.name}</span><span class="${cls(b.pct)} num">${sgn(b.pct)}${fmt(b.pct)}%</span></div>
     <div class="mini" style="margin-top:6px">
       5D <b class="${cls(b.r5)} num">${sgn(b.r5)}${fmt(b.r5)}%</b><br>
-      20D <b class="${cls(b.r20)} num">${sgn(b.r20)}${fmt(b.r20)}%</b><br>
+      30D <b class="${cls(b.r30)} num">${sgn(b.r30)}${fmt(b.r30)}%</b><br>
       60D <b class="${cls(b.r60)} num">${sgn(b.r60)}${fmt(b.r60)}%</b> · 1Y <b class="${cls(b.r250)} num">${sgn(b.r250)}${fmt(b.r250)}%</b>
     </div>
   </div>`).join('');
@@ -178,7 +178,7 @@ mk('ch-broad', {
   yAxis:{type:'value',...AX,scale:true},
   series: DATA.broad_styles.filter(b=>['上证50','中证1000','国证成长','国证价值'].includes(b.name))
     .map(b=>({name:b.name,type:'line',showSymbol:false,lineStyle:{width:b.name==='国证价值'||b.name==='中证1000'?2.2:1.4},
-      itemStyle:{color:BCOLORS[b.name]},data:b.hist.map(h=>[h[0],h[1]])}))
+      itemStyle:{color:BCOLORS[b.name]},data:b.hist.map(h=>[h[0], Math.round(h[1]/b.hist[0][1]*10000)/100])}))
 });
 
 /* ── ⑤ 五风格卡 ── */
@@ -188,9 +188,9 @@ $('style-cards').innerHTML = DATA.citics_styles.map(s => `
     <div class="k"><span>${s.name}</span><span style="color:${SCOLORS[s.name]};font-size:11px">${s.code}</span></div>
     <div class="mini" style="margin-top:6px">
       5D <b class="${cls(s.r5)} num">${sgn(s.r5)}${fmt(s.r5)}%</b><br>
-      20D <b class="${cls(s.r20)} num">${sgn(s.r20)}${fmt(s.r20)}%</b><br>
+      30D <b class="${cls(s.r30)} num">${sgn(s.r30)}${fmt(s.r30)}%</b><br>
       60D <b class="${cls(s.r60)} num">${sgn(s.r60)}${fmt(s.r60)}%</b><br>
-      1Y <b class="${cls(s.ry)} num">${sgn(s.ry)}${fmt(s.ry)}%</b>
+      1Y <b class="${cls(s.r250)} num">${sgn(s.r250)}${fmt(s.r250)}%</b>
     </div>
   </div>`).join('');
 const rank = [...DATA.citics_styles].sort((a,b) => b.r60 - a.r60);
@@ -308,7 +308,7 @@ $('style-evals').innerHTML = DATA.citics_styles.map(s => `
   </div>`).join('');
 
 /* 轮动矩阵 */
-const periods = [['r5','5D'],['r20','20D'],['r60','60D'],['ry','1Y']];
+const periods = [['r5','5D'],['r30','30D'],['r60','60D'],['r250','1Y']];
 let mh = '<tr><th>风格 \\ 周期</th>' + periods.map(p=>`<th>${p[1]}</th>`).join('') + '</tr>';
 rank.forEach(s => {
   mh += `<tr><td style="border-left:3px solid ${SCOLORS[s.name]}">${s.name}</td>`;
@@ -329,7 +329,7 @@ const spreads = [
   {k:'消费 − 周期（60D 价差）', v:S['消费'].r60 - S['周期'].r60, s:'内需端相对顺周期占优，反映盈利预期分化'},
 ];
 const disp5 = Math.max(...DATA.citics_styles.map(s=>s.r5)) - Math.min(...DATA.citics_styles.map(s=>s.r5));
-const disp20 = Math.max(...DATA.citics_styles.map(s=>s.r20)) - Math.min(...DATA.citics_styles.map(s=>s.r20));
+const disp20 = Math.max(...DATA.citics_styles.map(s=>s.r30)) - Math.min(...DATA.citics_styles.map(s=>s.r30));
 spreads.push({k:'五风格 5D 动量离散度', v:disp5, s: disp5>disp20 ? '短线风格分歧加大→轮动加速，忌单边追高' : '短线风格趋同→主线收敛'});
 spreads.push({k:'五风格 20D 动量离散度', v:disp20, s:'中期分化明显，风格选择的重要性高于行业选择'});
 $('spreads').innerHTML = spreads.map(x => `
@@ -440,7 +440,7 @@ $('zt-cards').innerHTML =
   `<div class="card"><div class="k"><span>涨停家数</span></div><div class="v num up">${LP.zt_count}</div><div class="mini">真实涨停（交易所口径）</div></div>` +
   `<div class="card"><div class="k"><span>跌停家数</span></div><div class="v num down">${LP.dt_count}</div><div class="mini">${LP.dt_names.slice(0,4).join('、')}${LP.dt_names.length>4?' 等':''}</div></div>` +
   `<div class="card"><div class="k"><span>最高连板</span></div><div class="v num">${LP.max_lb}<span style="font-size:14px;color:var(--ink3)"> 板</span></div><div class="mini">${LP.max_lb_stock} · 空间板</div></div>` +
-  `<div class="card"><div class="k"><span>炸板反复</span></div><div class="v num">${LP.zhaban_touched}<span style="font-size:14px;color:var(--ink3)"> 家</span></div><div class="mini">盘中开板 ${LP.zhaban_total} 次</div></div>`;
+  `<div class="card"><div class="k"><span>炸板反复</span></div><div class="v num">${LP.zhaban_touched != null ? LP.zhaban_touched : '—'}<span style="font-size:14px;color:var(--ink3)"> 家</span></div><div class="mini">盘中开板 ${LP.zhaban_total != null ? LP.zhaban_total : '—'} 次</div></div>`;
 
 const lbEntries = Object.entries(LP.lb_dist).sort((a,b)=>b[0]-a[0]);
 $('lb-ladder').innerHTML = lbEntries.map(([k,v]) =>
@@ -451,9 +451,9 @@ $('zt-ind-chips').innerHTML = '涨停行业分布：' + Object.entries(LP.zt_ind
   `<span class="chip" style="margin:2px 4px 2px 0;display:inline-block">${k} ${v}</span>`).join('');
 
 $('seal-stats').innerHTML = [
-  `<div class="row"><span class="nm">早盘封板（10:30 前）</span><span class="val">${LP.seal_early} 家</span><span class="sub">占 ${Math.round(LP.seal_early/LP.zt_count*100)}%</span></div>`,
-  `<div class="row"><span class="nm">午后封板（13:00 后）</span><span class="val">${LP.seal_afternoon} 家</span><span class="sub">占 ${Math.round(LP.seal_afternoon/LP.zt_count*100)}%</span></div>`,
-  `<div class="row"><span class="nm">封板后炸板复封</span><span class="val">${LP.zhaban_touched} 家</span><span class="sub">共 ${LP.zhaban_total} 次</span></div>`,
+  `<div class="row"><span class="nm">早盘封板（10:30 前）</span><span class="val">${LP.seal_early != null ? LP.seal_early + ' 家' : '未取得'}</span><span class="sub">${LP.seal_early != null ? '占 '+Math.round(LP.seal_early/LP.zt_count*100)+'%' : '数据源缺失'}</span></div>`,
+  `<div class="row"><span class="nm">午后封板（13:00 后）</span><span class="val">${LP.seal_afternoon != null ? LP.seal_afternoon + ' 家' : '未取得'}</span><span class="sub">${LP.seal_afternoon != null ? '占 '+Math.round(LP.seal_afternoon/LP.zt_count*100)+'%' : '数据源缺失'}</span></div>`,
+  `<div class="row"><span class="nm">封板后炸板复封</span><span class="val">${LP.zhaban_touched != null ? LP.zhaban_touched + ' 家' : '未取得'}</span><span class="sub">${LP.zhaban_total != null ? '共 '+LP.zhaban_total+' 次' : '数据源缺失'}</span></div>`,
   `<div class="row"><span class="nm">跌停名单</span><span class="val">${LP.dt_count} 家</span><span class="sub">${LP.dt_names.join('、')||'—'}</span></div>`
 ].join('');
 
