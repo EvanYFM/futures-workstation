@@ -1,0 +1,12 @@
+{
+  "as_of": "2026-10-23",
+  "source": "Wind 万得（MCP 查询，非自动管线；建议每月刷新一次）",
+  "note": "PE 为 TTM、PB 为 LF；分位数为近 5 年日频序列分位（0–100%）。仅覆盖重点标的，非全市场。",
+  "items": [
+    {"ticker": "AAPL", "name": "苹果", "pe": 39.36, "pe_pct5y": 97.9, "pb": 47.2, "pb_pct5y": 68.6},
+    {"ticker": "NVDA", "name": "英伟达", "pe": 26.36, "pe_pct5y": 16.0, "pb": 22.2, "pb_pct5y": 16.8},
+    {"ticker": "GOOGL", "name": "谷歌 A", "pe": 16.04, "pe_pct5y": 16.0, "pb": 6.11, "pb_pct5y": 32.8},
+    {"ticker": "AMZN", "name": "亚马逊", "pe": 19.77, "pe_pct5y": 33.4, "pb": 4.85, "pb_pct5y": 31.9},
+    {"ticker": "META", "name": "Meta", "pe": 21.76, "pe_pct5y": 27.7, "pb": 6.01, "pb_pct5y": 37.2}
+  ]
+}

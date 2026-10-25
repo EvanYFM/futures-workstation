@@ -301,6 +301,27 @@ function avg(arr) {
 }
 
 /* ══════════ ⑥ 真实广度 · 估值 · 事件 ══════════ */
+let STOCK_VAL = null;  // data/stock-valuation.json（Wind 手工刷新，独立于日更快照）
+
+function renderStockVal() {
+  const el = $('stock-val-table');
+  if (!el) return;
+  if (!STOCK_VAL || !STOCK_VAL.items?.length) {
+    el.innerHTML = '<tr><td style="color:var(--ink3)">暂无个股估值分位数据（Wind 手工刷新）</td></tr>';
+    return;
+  }
+  const pctCls = p => p == null ? '' : (p >= 80 ? 'up' : p <= 20 ? 'down' : '');
+  el.innerHTML =
+    `<tr><th>标的</th><th>PE(TTM)</th><th>PE 5年分位</th><th>PB(LF)</th><th>PB 5年分位</th></tr>` +
+    STOCK_VAL.items.map(x => `<tr>
+      <td>${x.name} <span style="color:var(--ink3)">${x.ticker}</span></td>
+      <td class="num">${fmt(x.pe)}</td>
+      <td class="num ${pctCls(x.pe_pct5y)}">${fmt(x.pe_pct5y, 0)}%</td>
+      <td class="num">${fmt(x.pb)}</td>
+      <td class="num ${pctCls(x.pb_pct5y)}">${fmt(x.pb_pct5y, 0)}%</td></tr>`).join('') +
+    `<tr><td colspan="5" style="color:var(--ink3);text-align:left">${STOCK_VAL.source} · 截至 ${STOCK_VAL.as_of} · ${STOCK_VAL.note}</td></tr>`;
+}
+
 function renderBreadthValuation(DATA, t) {
   const B = DATA.breadth, V = DATA.valuation, E = DATA.events;
   if (!B && !V && !E) {
@@ -328,6 +349,9 @@ function renderBreadthValuation(DATA, t) {
       <div class="card"><div class="k"><span>52 周新高 / 新低</span></div>
         <div class="v num"><span class="up">${B.hi_52w}</span> / <span class="down">${B.lo_52w}</span></div>
         <div class="s">${B.date} · ${B.note}</div></div>`;
+    const upEl = $('breadth-upgrade');
+    if (upEl) upEl.innerHTML = `<b>数据口径</b>：${B.universe_label || '—'}（覆盖 ${B.covered}/${B.universe}）` +
+      (B.upgrade ? ` · <span style="color:var(--ink2)">升级入口：${B.upgrade}</span>` : '');
     const bc = makeChart('ch-breadth');
     if (bc) {
       const labels = ['上涨占比', '20日线上方', '50日线上方', '200日线上方'];
@@ -527,6 +551,7 @@ function renderAll(DATA) {
   renderStructure(DATA.structure, t);
   /* ⑥ 真实广度 · 估值 · 事件 */
   renderBreadthValuation(DATA, t);
+  renderStockVal();
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
@@ -695,6 +720,10 @@ function syncNav() {
 
 async function boot() {
   refreshPalette();
+  /* 个股估值分位：独立文件、失败不影响主流程 */
+  fetchJson('./data/stock-valuation.json')
+    .then(d => { STOCK_VAL = d; renderStockVal(); })
+    .catch(() => renderStockVal());
   try {
     const meta = await fetchJson('./data/dashboard-meta.json');
     state.dates = meta.dates || [];
