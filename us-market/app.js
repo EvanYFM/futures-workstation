@@ -677,6 +677,7 @@ function renderAll(DATA) {
   /* ⑦ 研判 */
   if (DATA.calls && DATA.calls.cards) {
     $('calls-body').innerHTML =
+      `${DATA.calls.generated_by === 'rules-v1' ? '<div class="mini" style="color:var(--ink3);margin:-6px 0 10px">本日研判为<b>规则模板</b>自动生成（未经模型判读）；数据与阈值可核对，观点性判断请以人工复盘为准。</div>' : ''}` +
       `<div class="call-cards">${DATA.calls.cards.map(c => `
         <div class="call-card"><span class="cc-tag ${c.cls}">${c.tag}</span>${c.h ? `<span class="cc-h">${c.h}</span>` : ''}
         <div class="cc-t">${c.t}</div><div class="cc-b">${c.b}</div><div class="cc-e">${c.e}</div></div>`).join('')}</div>` +
