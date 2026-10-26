@@ -1126,3 +1126,8 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   background: transparent;
 }
 [data-theme="dark"] .ashare-frame { border-color: rgba(232, 229, 218, .18); }
+
+/* 2026-10-26 审计补充：潮汐象限语义 + CTA 方向拆解 */
+.tide-meaning { margin: 0; padding: 6px 12px 0; font-size: 11.5px; line-height: 1.5; color: var(--muted); }
+.cta-direction-row { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 8px; font-size: 12px; color: var(--muted); }
+.cta-direction-row b { font-weight: 600; }
