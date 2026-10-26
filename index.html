@@ -47,7 +47,7 @@
         .catch(function () { return null; });
     })();
   </script>
-  <link rel="stylesheet" href="./styles-v2.css?v=20261023-fastboot">
+  <link rel="stylesheet" href="./styles-v2.css?v=20261026-audit">
 </head>
 <body>
   <div id="app" class="app-shell" data-ready="false">
@@ -122,8 +122,8 @@
         <div id="resonanceFocus" class="focus-grid"></div>
 
         <div class="section-heading">
-          <div><span class="section-index">二</span><h2>期货资金潮汐</h2></div>
-          <p>三方资金净变动 × 主力合约涨跌,区分增仓与减仓驱动</p>
+          <div><span class="section-index">二</span><h2>席位方向潮汐</h2></div>
+          <p>三方席位合成净变化 × 主力合约涨跌,区分增仓与减仓驱动</p>
         </div>
         <div id="tideGrid" class="tide-grid"></div>
 
@@ -135,7 +135,7 @@
 
         <div class="section-heading">
           <div><span class="section-index">四</span><h2>净持仓分布变化</h2></div>
-          <p>全商品按当日资金净流入 / 净流出排序取前五;股指与国债不参与</p>
+          <p>全商品按当日席位合成方向金额排序取前五;股指与国债不参与</p>
         </div>
         <div id="netFlowGrid" class="netflow-grid"></div>
 
@@ -190,7 +190,7 @@
         <div class="instrument-layout instrument-layout-full">
           <div class="table-wrap">
             <table class="instrument-table">
-              <thead><tr><th>品种</th><th>三方资金</th><th>信号</th><th>收盘 / 涨跌</th><th>三方手数</th><th>内资 / 外资 / 家人反向</th></tr></thead>
+              <thead><tr><th>品种</th><th>席位合成方向</th><th>信号</th><th>收盘 / 涨跌</th><th>三方手数</th><th>内资 / 外资 / 家人反向</th></tr></thead>
               <tbody id="instrumentRows"></tbody>
             </table>
           </div>
@@ -511,6 +511,6 @@
   <script src="./journal-sync.js?v=20261023-fastboot" defer></script>
   <script src="./focus-technical-data.js?v=20261023-fastboot" defer></script>
   <script src="./focus-technical.js?v=20261023-fastboot" defer></script>
-  <script src="./app.js?v=20261023-fastboot" defer></script>
+  <script src="./app.js?v=20261026-audit" defer></script>
 </body>
 </html>

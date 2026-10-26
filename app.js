@@ -91,6 +91,31 @@ function maxAbs(items, getter) {
   return Math.max(1, ...items.map((item) => Math.abs(numeric(getter(item)))));
 }
 
+/* 合约口径规范化与对照（2026-10-26 审计修复）。
+   行情、保证金、技术三块证据来自不同上游，各自选「主力合约」：
+   行情走 Fiona 成交额口径、保证金走日报底表、技术走东财主力。
+   三者可能落在不同月份（如 FU 行情 FU2612 / 保证金 FU2611 / 技术 FU2701），
+   跨月价差会污染收盘、涨跌与技术位。数据无法强行统一，但必须显式披露。 */
+const contractKey = (value) => {
+  const raw = String(value || "").toUpperCase().split(".")[0].trim();
+  const match = raw.match(/^([A-Z]+)(\d{3})$/);   // 郑商所三位年码: CF701 = CF2701
+  return match ? `${match[1]}2${match[2]}` : raw;
+};
+
+function contractScope(item) {
+  const quote = contractKey(item.quote?.contract);
+  const margin = contractKey(item.margin?.contract);
+  const technical = contractKey(item.technical?.contract);
+  const conflicts = [];
+  if (margin && margin !== quote) conflicts.push("保证金");
+  if (technical && technical !== quote) conflicts.push("技术");
+  const parts = [];
+  if (quote) parts.push(`行情 ${quote}`);
+  if (margin) parts.push(`保证金 ${margin}`);
+  if (technical) parts.push(`技术 ${technical}`);
+  return { text: parts.join(" · "), conflicts, quote };
+}
+
 function renderDateControls() {
   /* 日期切换已改为顶栏日历(见 index.html 内联脚本);此处仅同步按钮文本 */
   const dateText = document.getElementById("dateText");
@@ -159,7 +184,7 @@ function renderTide() {
   }).join("");
 }
 
-/* 四 净持仓分布变化：全商品按当日资金净流入/流出排序取前五（防御性剔除股指/国债） */
+/* 四 净持仓分布变化：全商品按当日席位合成方向金额排序取前五（防御性剔除股指/国债） */
 function renderNetFlowChanges() {
   const items = currentSnapshot().instruments
     .filter((item) => {
@@ -185,8 +210,8 @@ function renderNetFlowChanges() {
   $("#netFlowGrid").innerHTML = `<article class="sector-block netflow-block">
     <div class="sector-title"><strong>当日资金净流动</strong><span class="sector-count">口径：${escapeHtml(pool[0].marketFlow.source || "同花顺/AKShare 资金流")}</span></div>
     <div class="sector-sides">
-      ${side(topLong, "净流入前五", "bull-text")}
-      ${side(topShort, "净流出前五", "bear-text")}
+      ${side(topLong, "合成偏多前五", "bull-text")}
+      ${side(topShort, "合成偏空前五", "bear-text")}
     </div>
   </article>`;
 }
@@ -396,7 +421,7 @@ function sparkline(values, tone = "bullish", large = false, dates = [], prices =
   const priceRange = priceMax - priceMin || 1;
   const pricePoints = validPrices.map(([index, value]) => `${(padding.left + (values.length === 1 ? 0 : index / (values.length - 1) * (width - padding.left - padding.right))).toFixed(1)},${(padding.top + (priceMax - value) / priceRange * (height - padding.top - padding.bottom)).toFixed(1)}`).join(" ");
   const priceLayer = priceValues.length ? `<text class="spark-label spark-price-label" x="${width - padding.right + 9}" y="${padding.top + 4}">${formatPrice(priceMax)}</text><text class="spark-label spark-price-label" x="${width - padding.right + 9}" y="${height - padding.bottom + 4}">${formatPrice(priceMin)}</text><polyline class="spark-price-line" points="${pricePoints}"></polyline>` : "";
-  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="历史资金净变动与收盘价曲线，左轴为资金净变动金额，右轴为收盘价">${grid}<line class="spark-y-axis" x1="${padding.left}" x2="${padding.left}" y1="${padding.top}" y2="${height - padding.bottom}"></line><polyline class="spark-line ${tone}" points="${points}"></polyline>${priceLayer}<text class="spark-label" x="${padding.left}" y="${height - 7}">${firstDate}</text><text class="spark-label" x="${width - padding.right}" y="${height - 7}" text-anchor="end">${lastDate}</text></svg>`;
+  return `<svg viewBox="0 0 ${width} ${height}" role="img" aria-label="历史席位合成净变化与收盘价曲线，左轴为席位合成净变化金额，右轴为收盘价">${grid}<line class="spark-y-axis" x1="${padding.left}" x2="${padding.left}" y1="${padding.top}" y2="${height - padding.bottom}"></line><polyline class="spark-line ${tone}" points="${points}"></polyline>${priceLayer}<text class="spark-label" x="${padding.left}" y="${height - 7}">${firstDate}</text><text class="spark-label" x="${width - padding.right}" y="${height - 7}" text-anchor="end">${lastDate}</text></svg>`;
 }
 
 function formatPrice(value) {
@@ -445,7 +470,7 @@ function priceFlowChart(series, variety) {
   }).join("");
   const firstDate = formatDate(series[0].date);
   const lastDate = formatDate(series.at(-1).date);
-  return `<svg class="detail-combo-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(variety)}历史收盘价与三方资金净变动">
+  return `<svg class="detail-combo-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(variety)}历史收盘价与席位合成方向净变动">
     <line class="detail-grid" x1="${left}" x2="${width - right}" y1="28" y2="28"></line>
     <line class="detail-grid" x1="${left}" x2="${width - right}" y1="154" y2="154"></line>
     <line class="detail-zero" x1="${left}" x2="${width - right}" y1="${zeroY}" y2="${zeroY}"></line>
@@ -539,7 +564,7 @@ function technicalRelationship(technical, item) {
   const moneySign = Math.sign(numeric(item.amountSignal));
   if (!technicalSign) return `日线${dailyState || "未确认"}、60分钟${hourState || "未确认"}，双周期尚未同向`;
   const direction = technicalSign > 0 ? "偏多" : "偏空";
-  const moneyRead = !moneySign ? "三方资金中性" : moneySign === technicalSign ? `三方资金${direction}同向` : "三方资金反向";
+  const moneyRead = !moneySign ? "席位合成方向中性" : moneySign === technicalSign ? `席位合成方向${direction}同向` : "席位合成方向反向";
   return `技术${direction}；${moneyRead}`;
 }
 
@@ -577,7 +602,11 @@ function renderDetailWorkspace() {
   const shortTotal = Math.abs(item.brokerRanking.netShort.reduce((sum, entry) => sum + numeric(entry.netPosition), 0));
   const seatBias = longTotal > shortTotal ? "多方样本占优" : shortTotal > longTotal ? "空方样本占优" : "席位样本均衡";
   const technicalRead = technicalRelationship(technical, item);
-  const researchState = `${item.amountSignal >= 0 ? "资金偏多" : "资金偏空"} · ${technicalRead}`;
+  const hasSeatData = Boolean(item.brokerRanking?.netLong?.length || item.brokerRanking?.netShort?.length);
+  const researchState = hasSeatData
+    ? `${item.amountSignal >= 0 ? "席位合成偏多" : "席位合成偏空"} · ${technicalRead}`
+    : `席位未覆盖 · ${technicalRead}`;
+  const contract = contractScope(item);
   const disclosure = currentSnapshot().disclosureDates.at(-1) || "未披露";
   const recentEvents = [...series].reverse().slice(0, 5);
   const latestBasis = item.fundamentals?.basis?.at(-1);
@@ -601,12 +630,12 @@ function renderDetailWorkspace() {
     </section>
     <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
     <section id="detail-overview" class="detail-dashboard-grid">
-      <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & FLOW</small><h3>价格与三方资金</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>资金净变动</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
-      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>接口事实</dt><dd>三方资金 ${formatAmount(item.amountSignal)}。</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
+      <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & SEAT DIRECTION</small><h3>价格与席位合成方向</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>席位合成净变化</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
+      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>模型计算</dt><dd>席位合成方向 ${formatAmount(item.amountSignal)}。这是按席位分组与保证金换算得到的自建指标，不等于真实资金净流入。</dd></div><div><dt>数据口径</dt><dd>${escapeHtml(contract.text || "合约缺失")}${contract.conflicts.length ? `；<b class="bear-text">${contract.conflicts.join("、")}合约与行情不同月</b>，价格与技术位不可直接比较` : "；三处合约一致"}</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
     </section>
     <section id="detail-positioning" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>POSITIONING</small><h3>资金与席位结构</h3></div><p>存量净持仓与今日边际分列；家人按原始方向展示</p></div><div class="position-matrix"><div class="position-matrix-head"><span>资金群体</span><span>存量净持仓</span><span>今日手数净变动</span><span>今日净金额</span><span>边际动作</span></div>${groupRows.map(([label, group]) => `<div class="position-matrix-row"><b>${label}</b>${positionVisual(group.netPosition, stockScale)}<strong class="${signClass(group.hands)}">${formatHands(group.hands)}</strong><strong class="${signClass(group.amount)}">${formatAmount(group.amount)}</strong><span class="${signClass(numeric(group.longChange) - numeric(group.shortChange))}">${escapeHtml(flowAction(group))}</span></div>`).join("")}</div><div class="seat-rank-grid detail-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${item.brokerRanking.netLong.length}/5 <span>${rankingDominance(item.brokerRanking.netLong)}</span></div>${rankRows(item.brokerRanking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${item.brokerRanking.netShort.length}/5 <span>${rankingDominance(item.brokerRanking.netShort)}</span></div>${rankRows(item.brokerRanking.netShort, "bear-text", "暂无净空席位")}</div></div></section>
     <section id="detail-technical" class="detail-surface detail-wide-section technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
-        ${technical ? `<div class="technical-period-grid">${timeframeEvidence("日线观察", technical.dailyChan, technical.dailyObservation)}${timeframeEvidence("60分钟观察", technical.chan60, technical.hourObservation)}</div><div class="technical-compact-read"><p><b>量仓：</b>${escapeHtml(technical.marketActivity?.label || "数据不足")} · ${escapeHtml(technical.marketActivity?.impulse || "无法确认")}；成交较前日 ${technical.marketActivity?.volumeRatio == null ? "暂无" : technicalValue((technical.marketActivity.volumeRatio - 1) * 100, 1, "%")}。</p><p><b>位置：</b>支撑 ${levelText(technical.keyLevels?.supports, "暂无")}；压力 ${levelText(technical.keyLevels?.resistances, "暂无")}。</p><p><b>双周期：</b>${escapeHtml(technicalRead)}。</p></div><p class="detail-panel-note">EMA顺序为 5 / 20 / 60；数据日 ${escapeHtml(technical.sourceDate)}，60分钟截至 ${escapeHtml(technical.chan60?.endTime || "无法确认")}。技术观察不替代资金面与基本面。</p>` : `<div class="data-gap"><strong>当前技术面覆盖沪银、焦煤、燃油、生猪、碳酸锂和鸡蛋</strong><p>该品种尚未生成技术快照，不使用其他品种或旧日数据填充。</p></div>`}</section>
+        ${technical ? `<div class="technical-period-grid">${timeframeEvidence("日线观察", technical.dailyChan, technical.dailyObservation)}${timeframeEvidence("60分钟观察", technical.chan60, technical.hourObservation)}</div><div class="technical-compact-read"><p><b>量仓：</b>${escapeHtml(technical.marketActivity?.label || "数据不足")} · ${escapeHtml(technical.marketActivity?.impulse || "无法确认")}；较前一根60分钟K ${technical.marketActivity?.volumeRatio == null ? "暂无" : technicalValue((technical.marketActivity.volumeRatio - 1) * 100, 1, "%")}。</p><p><b>位置：</b>支撑 ${levelText(technical.keyLevels?.supports, "暂无")}；压力 ${levelText(technical.keyLevels?.resistances, "暂无")}。</p><p><b>双周期：</b>${escapeHtml(technicalRead)}。</p></div><p class="detail-panel-note">技术口径：合约 ${escapeHtml(technical.contract || "—")}；EMA顺序为 5 / 20 / 60；数据日 ${escapeHtml(technical.sourceDate)}，60分钟截至 ${escapeHtml(technical.chan60?.endTime || "无法确认")}。量仓比较对象为前一根 60 分钟 K 线，不是前一日。技术观察不替代资金面与基本面；分型/笔/中枢为简化实现，不等同严格缠论买卖点。</p>` : `<div class="data-gap"><strong>当前技术面覆盖沪银、焦煤、燃油、生猪、碳酸锂和鸡蛋</strong><p>该品种尚未生成技术快照，不使用其他品种或旧日数据填充。</p></div>`}</section>
     <article id="detail-fundamental" class="detail-surface detail-wide-section fundamental-surface"><div class="detail-section-head"><div><small>FUNDAMENTALS</small><h3>基本面证据板</h3></div><span class="detail-stamp neutral">事实与缺口分列</span></div>${fundamentalEvidence(item)}<p class="detail-panel-note">基差口径为现货价减主力期货价；仓单使用东方财富期货库存数据。供需、现金成本与产业库存未接入前不作推断。</p></article>
     <section id="detail-events" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>EVENT PATH</small><h3>历史事件</h3></div><p>快照事实按披露日追溯</p></div><div class="event-timeline">${recentEvents.map((entry) => `<div><time>${formatDate(entry.date)}</time><b class="${signClass(entry.amount)}">${formatAmount(entry.amount)}</b><p>${escapeHtml(entry.structure)} · ${formatHands(entry.hands)} 手${entry.close == null ? "" : ` · 收盘 ${formatPrice(entry.close)}`}</p></div>`).join("")}</div></section>`;
 }
@@ -622,7 +651,7 @@ function renderDetail() {
   $("#detailPanel").innerHTML = `<div class="detail-header"><div><h3>${escapeHtml(item.variety)} <small>${escapeHtml(item.symbol)}</small></h3><p>${escapeHtml(item.sector)} · ${escapeHtml(item.quote?.contract || item.margin.contract || "主力合约未披露")} · ${escapeHtml(item.margin.exchange || "")}</p></div><div class="detail-side"><div class="detail-market"><div class="detail-quote"><small>涨跌幅</small><strong class="${dayReturn == null ? "" : signClass(dayReturn)}">${dayReturn == null ? "暂无" : `${formatSigned(dayReturn, 2)}%`}</strong></div><div class="detail-quote"><small>收盘价</small><strong>${closePrice == null ? "暂无" : numeric(closePrice).toLocaleString("zh-CN", {maximumFractionDigits: 4})}</strong></div></div><div class="detail-direction ${signClass(item.amountSignal)}">${escapeHtml(item.direction)}</div></div></div>
     <div class="detail-metrics">
       <div class="detail-metric"><span>三方手数净变动</span><strong class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</strong></div>
-      <div class="detail-metric"><span>三方资金净变动</span><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong></div>
+      <div class="detail-metric"><span>席位合成方向净变动</span><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong></div>
       <div class="detail-metric"><span>总持仓边际</span><strong>${formatHands(item.totalPositionChange)}</strong></div>
       <div class="detail-metric"><span>一手保证金</span><strong>${numeric(item.margin.perLot).toLocaleString("zh-CN", {maximumFractionDigits:0})}</strong></div>
     </div>`;
@@ -634,7 +663,7 @@ function renderHistory() {
   $("#historyControls").innerHTML = `<label>观察品种 <select id="historySymbolSelect">${symbols.map((item) => `<option value="${escapeHtml(item.symbol)}" ${item.symbol === state.historySymbol ? "selected" : ""}>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</option>`).join("")}</select></label>`;
   const series = seriesFor(state.historySymbol);
   const current = currentSnapshot().instruments.find((item) => item.symbol === state.historySymbol);
-  $("#historyPanel").innerHTML = `<section class="history-chart"><div class="history-chart-head"><h3>${escapeHtml(current?.variety || state.historySymbol)} · 资金与价格</h3><span><i class="${dirClass(series.at(-1)?.amount || 0)}"></i>资金净变动 <b></b>收盘价</span></div><div class="large-spark">${sparkline(series.map((entry) => entry.amount), dirClass(series.at(-1)?.amount || 0), true, series.map((entry) => entry.date), series.map((entry) => entry.close))}</div></section>
+  $("#historyPanel").innerHTML = `<section class="history-chart"><div class="history-chart-head"><h3>${escapeHtml(current?.variety || state.historySymbol)} · 资金与价格</h3><span><i class="${dirClass(series.at(-1)?.amount || 0)}"></i>席位合成净变化 <b></b>收盘价</span></div><div class="large-spark">${sparkline(series.map((entry) => entry.amount), dirClass(series.at(-1)?.amount || 0), true, series.map((entry) => entry.date), series.map((entry) => entry.close))}</div></section>
     <section class="history-table"><h3>披露日快照</h3><div class="history-rows">${[...series].reverse().map((entry) => `<div class="history-row"><span>${formatDate(entry.date)}</span><strong class="${signClass(entry.hands)}">${formatHands(entry.hands)} 手</strong><strong class="${signClass(entry.amount)}">${formatAmount(entry.amount)}</strong></div>`).join("")}</div></section>`;
 }
 
