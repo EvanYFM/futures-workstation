@@ -182,7 +182,7 @@ function renderTide() {
       <span class="tide-return ${signClass(item.changePct)}">${formatSigned(item.changePct, 2)}%</span>
       <span class="tide-amount ${signClass(item.amount)}">${formatAmount(item.amount)}</span>
     </button>`).join("");
-    return `<article class="tide-block ${tone}"><header><span>${escapeHtml(bucket.label)}</span><strong>${bucket.count}</strong></header><div>${rows || `<p class="empty-side">该象限暂无品种</p>`}</div></article>`;
+    return `<article class="tide-block ${tone}"><header><span>${escapeHtml(bucket.label)}</span><strong>${bucket.count}</strong></header>${bucket.meaning ? `<p class="tide-meaning">${escapeHtml(bucket.meaning)}</p>` : ""}<div>${rows || `<p class="empty-side">该象限暂无品种</p>`}</div></article>`;
   }).join("");
 }
 
