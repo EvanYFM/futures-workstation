@@ -90,9 +90,10 @@ $('idx-cards').innerHTML = DATA.indices.map(r => `
   </div>`).join('');
 
 /* ── 涨跌家数 ── */
-const M = DATA.market, tot = M.up + M.down + 131;
-$('seg-up').style.flex = M.up; $('seg-flat').style.flex = 131; $('seg-down').style.flex = M.down;
-$('nb-up').textContent = M.up; $('nb-flat').textContent = 131; $('nb-down').textContent = M.down;
+const M = DATA.market, MFLAT = M.flat != null ? M.flat : 131; // 2026-10-29修复: flat改为数据驱动(RUNBOOK 9.2禁止硬编码131)
+const tot = M.up + M.down + MFLAT;
+$('seg-up').style.flex = M.up; $('seg-flat').style.flex = MFLAT; $('seg-down').style.flex = M.down;
+$('nb-up').textContent = M.up; $('nb-flat').textContent = MFLAT; $('nb-down').textContent = M.down;
 $('nb-lu').textContent = M.limit_up; $('nb-ld').textContent = M.limit_down;
 
 /* ── 大小单 ── */
@@ -283,7 +284,7 @@ function renderParticipants(P) {
 
   $('attr-table').innerHTML = '<thead><tr><th>时期</th><th>阶段</th><th>主导参与者</th><th>证据</th><th>市场表现</th></tr></thead><tbody>' +
     P.attribution.map(a => `<tr><td>${a.period}</td><td>${a.title}</td><td class="aw">${a.who}</td><td>${a.evidence}</td><td>${a.move}</td></tr>`).join('') + '</tbody>';
-  $('p-concl-b').textContent = P.conclusion;
+  $('p-concl-b').innerHTML = P.conclusion; // 2026-10-29修复: conclusion含<b>标签, textContent会显示为字面文本
 }
 
 /* 信号箱 */
@@ -470,7 +471,7 @@ mk('ch-margin', {
     {name:'合计',type:'line',data:MG.series.map(s=>s.total),lineStyle:{width:2,color:TH().ink},itemStyle:{color:TH().ink},symbolSize:5}
   ]
 });
-$('mg-note').textContent = `最新合计约 ${(MG.today_total/1e4).toFixed(2)} 万亿（${MG.note}）；${MG.delta != null ? '较上一完整交易日' + (MG.delta >= 0 ? '增加 ' : '减少 ') + Math.abs(MG.delta).toLocaleString() + ' 亿' : ''}。`;
+$('mg-note').innerHTML = `最新合计约 ${(MG.today_total/1e4).toFixed(2)} 万亿（${MG.note}）；${MG.delta != null ? '较上一完整交易日' + (MG.delta >= 0 ? '增加 ' : '减少 ') + Math.abs(MG.delta).toLocaleString() + ' 亿' : ''}。`; // 2026-10-29修复: margin.note含<b>标签, textContent会显示为字面文本
 
 $('etf-list').innerHTML = DATA.etf_top.map(e =>
   `<div class="row"><span class="nm">${e.name}</span><span class="val ${e.pct>=0?'up':'down'}">${sgn(e.pct)}${fmt(e.pct)}%</span><span class="sub">${e.amt} 亿</span></div>`).join('');
