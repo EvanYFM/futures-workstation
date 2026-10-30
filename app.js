@@ -32,6 +32,9 @@ const state = {
   ctaDirection: "all",
   activeCtaSymbol: null,
   focusTechnicalSymbol: null,
+  /* 策略规则卡 v2：A 区间回归 / B 突破（strategies.json 云端同步） */
+  strategies: [],
+  monthlyReviewMonth: "all",
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -738,10 +741,17 @@ function openOrCreateCard(symbol) {
     source: "工作台日志", kind: "observation",
     date: dateText, variety: item.variety, symbol: symbol,
     contract: null, strike: null, instrumentType: null, optionType: null, moneyness: null,
-    direction: null, strategySource: "自己",
+    direction: null, strategySource: "自己", strategyTag: null,
     executed: false, tradeStatus: "no_trade",
     positionPct: "", myPnl: null, pnlRatio: null, strategyPnlText: "",
     noTradeReason: "", stopLossTakeProfit: "", trigger: "",
+    stopPrice: "", stopPremiumPct: "", stopTime: "",
+    expiryDate: null, dte: null, lots: null, premiumPerLot: null, totalCost: null,
+    accountPct: "", ivRank: "",
+    rangeLower: null, rangeUpper: null, rangeCurrent: null, rangePosPct: null, nearEdge: null,
+    discipline: null, violations: null,
+    holdExecStatus: "", holdNotes: "",
+    resultVsExpect: "", resultGapNote: "", planCompliance: "",
     ratings: {}, attribution: null, review: "",
     mainContradiction: "", closeNote: "", reviewNote: "", selfInquiry: "",
     status: "draft",
@@ -754,10 +764,74 @@ function openOrCreateCard(symbol) {
 }
 
 /* 表单字段 → observation 字段（草稿保存与发布共用一套采集） */
-/* 字段按交易状态显隐：只在表单里出现（未被隐藏）时才覆盖，其余保留原值。
+/* 字段按交易状态/工具类型/策略归属显隐：只在表单里出现（未被隐藏）时才覆盖，其余保留原值。
    「复盘与认知偏差原文」文本框已下线：不再接收输入，老记录的 review 原值保留。 */
+/* 期权复盘卡 v2 新增：策略归属/期权结构(含 DTE·总成本自动计算)/区间位置(位置%·边界附近自动)/
+   三条止损线/纪律自评+禁止项/持仓执行状态/结果vs预期+计划执行度。 */
+const STRATEGY_TAGS = [
+  ["", "未归属"],
+  ["A", "A 区间回归"],
+  ["B", "B 突破"],
+  ["unplanned", "计划外"],
+];
+const VIOLATION_ITEMS = [
+  ["reversal_after_stop", "止损后 2 小时内同标的反向"],
+  ["after_loss", "刚发生亏损 / 刚被止损"],
+  ["open_30min", "开盘后 30 分钟内"],
+  ["daily_loss_cap", "当日已亏损达限额"],
+  ["emotion_high", "情绪自评 ≥ 7"],
+  ["unclear_source", "说不清信息来源"],
+];
+const REVIEW_TAG_LABELS = {A: "A 区间回归", B: "B 突破", unplanned: "计划外"};
+
+function reviewAutoRange(form) {
+  const lower = form.querySelector('[name="rangeLower"]')?.value.trim();
+  const upper = form.querySelector('[name="rangeUpper"]')?.value.trim();
+  const current = form.querySelector('[name="rangeCurrent"]')?.value.trim();
+  if (lower === "" && upper === "" && current === "") return null;
+  const lo = lower === "" ? null : numeric(lower);
+  const up = upper === "" ? null : numeric(upper);
+  const cur = current === "" ? null : numeric(current);
+  let posPct = null;
+  if (lo != null && up != null && cur != null && up > lo) {
+    posPct = Math.round(((cur - lo) / (up - lo)) * 1000) / 10;
+  }
+  let nearEdge = null;
+  if (posPct != null) {
+    const edge = strategyRuleValue(form.querySelector('[name="strategyTag"]')?.value, "edgePct");
+    const threshold = edge != null ? edge : 10;
+    nearEdge = posPct <= threshold || posPct >= 100 - threshold;
+  }
+  return {rangeLower: lo, rangeUpper: up, rangeCurrent: cur, rangePosPct: posPct, nearEdge};
+}
+
+function reviewAutoOptionNumbers(item, form) {
+  const dte = reviewCalcDte(form.querySelector('[name="expiryDate"]')?.value, item.date);
+  const lots = form.querySelector('[name="lots"]')?.value.trim();
+  const premium = form.querySelector('[name="premiumPerLot"]')?.value.trim();
+  const totalCost = lots !== "" && premium !== "" ? Math.round(numeric(lots) * numeric(premium)) : null;
+  return {dte: lots === "" && premium === "" && form.querySelector('[name="expiryDate"]')?.value === "" ? null : dte, totalCost};
+}
+
+function reviewCalcDte(expiry, fromDate) {
+  if (!expiry) return null;
+  const end = new Date(expiry + "T00:00:00");
+  if (Number.isNaN(end.getTime())) return null;
+  const start = fromDate ? new Date(fromDate + "T00:00:00") : new Date();
+  if (Number.isNaN(start.getTime())) return null;
+  return Math.round((end - start) / 86400000);
+}
+
+function strategyRuleValue(tag, key) {
+  const strategy = (state.strategies || []).find((entry) => entry.id === tag);
+  const raw = strategy?.rules?.[key];
+  const num = raw == null ? null : numeric(String(raw).replace(/[^\d.-]/g, ""));
+  return raw != null && num != null && !Number.isNaN(num) ? num : null;
+}
+
 function collectFormIntoObservation(base, form) {
   const values = Object.fromEntries(new FormData(form));
+  const has = (name) => form.querySelector(`[name="${name}"]`) != null;
   const attribution = {};
   [["judgment", "判断错?"], ["timing", "时机错?"], ["position", "仓位错?"], ["tool", "工具错?"], ["execution", "执行错?"]].forEach(([key, label]) => {
     if (values[`attr_${key}`]) attribution[label] = values[`attr_${key}`];
@@ -775,6 +849,58 @@ function collectFormIntoObservation(base, form) {
   if (values.noTradeReason != null) out.noTradeReason = values.noTradeReason.trim();
   if (values.reviewNote != null) out.reviewNote = values.reviewNote.trim();
   if (values.selfInquiry != null) out.selfInquiry = values.selfInquiry.trim();
+  /* ---- 复盘卡 v2：基础扩展 ---- */
+  if (has("contract")) out.contract = (values.contract || "").trim() || null;
+  if (has("instrumentType")) out.instrumentType = values.instrumentType || null;
+  if (has("strategyTag")) out.strategyTag = values.strategyTag || null;
+  /* ---- 期权结构 ---- */
+  if (has("optionType")) out.optionType = values.optionType || null;
+  if (has("strike")) out.strike = (values.strike || "").trim() || null;
+  if (has("moneyness")) out.moneyness = (values.moneyness || "").trim() || null;
+  if (has("expiryDate")) {
+    out.expiryDate = values.expiryDate || null;
+    out.dte = reviewCalcDte(out.expiryDate, out.date || base.date);
+  }
+  if (has("lots")) out.lots = values.lots === "" ? null : numeric(values.lots);
+  if (has("premiumPerLot")) out.premiumPerLot = values.premiumPerLot === "" ? null : numeric(values.premiumPerLot);
+  if (has("lots") && has("premiumPerLot")) {
+    out.totalCost = out.lots != null && out.premiumPerLot != null ? Math.round(out.lots * out.premiumPerLot) : null;
+  }
+  if (has("accountPct")) out.accountPct = (values.accountPct || "").trim();
+  if (has("ivRank")) out.ivRank = (values.ivRank || "").trim();
+  /* ---- 区间位置（自动计算位置百分比与边界附近） ---- */
+  if (has("rangeLower") || has("rangeUpper") || has("rangeCurrent")) {
+    Object.assign(out, reviewAutoRange(form) || {});
+  }
+  /* ---- 三条止损线 ---- */
+  if (has("stopPrice")) out.stopPrice = (values.stopPrice || "").trim();
+  if (has("stopPremiumPct")) out.stopPremiumPct = (values.stopPremiumPct || "").trim();
+  if (has("stopTime")) out.stopTime = (values.stopTime || "").trim();
+  /* ---- 纪律自评 + 禁止项 ---- */
+  if (has("emotionLevel")) {
+    out.discipline = {
+      sleepHours: (values.sleepHours || "").trim(),
+      emotionLevel: values.emotionLevel === "" ? null : numeric(values.emotionLevel),
+      justStopped: !!form.querySelector('[name="justStopped"]:checked'),
+      justWoke: !!form.querySelector('[name="justWoke"]:checked'),
+      withinOpen30: !!form.querySelector('[name="withinOpen30"]:checked'),
+      infoSource: (values.infoSource || "").trim(),
+    };
+  }
+  if (form.querySelector('[name^="violation_"]')) {
+    out.violations = [...form.querySelectorAll('[name^="violation_"]:checked')].map((el) => el.value);
+  }
+  /* 情绪强度 ≥ 7 本身就是禁止项：自评达到即自动入册（月度检视统计用） */
+  if (out.violations && out.discipline && (out.discipline.emotionLevel ?? -1) >= 7 && !out.violations.includes("emotion_high")) {
+    out.violations.push("emotion_high");
+  }
+  /* ---- 持仓执行状态 / 随手笔记 ---- */
+  if (has("holdExecStatus")) out.holdExecStatus = values.holdExecStatus || "";
+  if (has("holdNotes")) out.holdNotes = (values.holdNotes || "").trim();
+  /* ---- 结果 vs 预期 / 计划执行度 ---- */
+  if (has("resultVsExpect")) out.resultVsExpect = values.resultVsExpect || "";
+  if (has("resultGapNote")) out.resultGapNote = (values.resultGapNote || "").trim();
+  if (has("planCompliance")) out.planCompliance = values.planCompliance || "";
   out.attribution = values.attr_judgment != null ? (Object.keys(attribution).length ? attribution : null) : (base.attribution || null);
   out.editedAt = new Date().toISOString();
   return {out, values};
@@ -885,22 +1011,68 @@ function renderObservationEditor() {
     : "";
 
   /* 字段按状态增减：未交易 = 方向/核心逻辑/未交易原因；
-     持仓中 = 加 入场触发/仓位/失效止损/盈亏；已平仓 = 全量（原文输入已下线） */
-  const planFields = `
-      <label>入场触发<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="价格或技术条件"></label>
+     持仓中 = 加 合约/工具/策略/入场触发/仓位/失效止损/三止损线/期权结构/区间位置/纪律自查/盈亏/执行状态；
+     已平仓 = 全量（原文输入已下线）。v2：期权与策略字段按 工具类型/策略归属 联动显隐。 */
+  const isExecuted = tradeStatus !== "no_trade";
+  const planFields = isExecuted ? `
+      <label>入场触发<input name="trigger" value="${escapeHtml(item.trigger || "")}" placeholder="可证伪的一句话:什么条件成立才进,不能写看涨/看跌"></label>
       <label>仓位(占总仓位比例)<input name="positionPct" value="${escapeHtml(item.positionPct || "")}" placeholder="如 30%"></label>
-      <label>失效 / 止损<input name="stopLossTakeProfit" value="${escapeHtml(item.stopLossTakeProfit || "")}" placeholder="错在哪里退出"></label>`;
+      <label class="wide">失效条件(价格到哪我就认错)<input name="stopLossTakeProfit" value="${escapeHtml(item.stopLossTakeProfit || "")}" placeholder="认错离场的一句话"></label>
+      <label>止损线①价格<input name="stopPrice" value="${escapeHtml(item.stopPrice || "")}" placeholder="标的价格到哪离场"></label>
+      <label>止损线②权利金%<input name="stopPremiumPct" value="${escapeHtml(item.stopPremiumPct || "")}" placeholder="期权:权利金亏多少%离场,如 -40"></label>
+      <label>止损线③时间<input name="stopTime" value="${escapeHtml(item.stopTime || "")}" placeholder="时间到哪离场,如事件前/DTE≤30"></label>` : "";
+  /* 基础扩展：合约 / 工具类型 / 策略归属（交易状态≠未交易时显示） */
+  const instrumentFields = isExecuted ? `
+      <label>工具类型<select name="instrumentType">${option("", "未指定", item.instrumentType || "")}${option("期货", "期货", item.instrumentType || "")}${option("期权", "期权", item.instrumentType || "")}</select></label>
+      <label>合约<input name="contract" value="${escapeHtml(item.contract || "")}" placeholder="如 AL2512 / SC2510P5800"></label>
+      <label>策略归属<select name="strategyTag">${STRATEGY_TAGS.map(([value, label]) => option(value, label, item.strategyTag || "")).join("")}</select></label>` : "";
+  /* 策略规则联动：勾选 A/B 后显示当前版本规则要点（改规则去「策略规则」面板） */
+  const strategyEcho = isExecuted && ["A", "B"].includes(item.strategyTag) ? strategyEchoHtml(item.strategyTag) : "";
+  /* 期权结构（工具类型=期权时显示；结构字段必填，IV/占账户比选填） */
+  const optionFields = isExecuted && item.instrumentType === "期权" ? `
+      <div class="decision-attr-grid wide obs-option-grid"><span class="decision-attr-title">期权结构（方向/行权价/到期日/张数/权利金 必填）</span>
+      <label>方向<select name="optionType">${option("", "未定", item.optionType || "")}${option("call", "Call", item.optionType || "")}${option("put", "Put", item.optionType || "")}</select></label>
+      <label>行权价<input name="strike" value="${escapeHtml(item.strike == null ? "" : String(item.strike))}" placeholder="如 5800"></label>
+      <label>虚实值档<input name="moneyness" value="${escapeHtml(item.moneyness || "")}" placeholder="如实1 / 平值 / 虚3"></label>
+      <label>到期日<input name="expiryDate" type="date" value="${escapeHtml(item.expiryDate || "")}"></label>
+      <label>DTE(自动)<span class="obs-auto" data-auto="dte">—</span></label>
+      <label>张数<input name="lots" type="number" min="1" step="1" value="${item.lots == null ? "" : escapeHtml(String(item.lots))}"></label>
+      <label>权利金/张(元)<input name="premiumPerLot" type="number" min="0" step="any" value="${item.premiumPerLot == null ? "" : escapeHtml(String(item.premiumPerLot))}"></label>
+      <label>总成本(自动)<span class="obs-auto" data-auto="totalCost">—</span></label>
+      <label>占账户比例%(选填)<input name="accountPct" value="${escapeHtml(item.accountPct || "")}" placeholder="上限见策略规则"></label>
+      <label>IV 分位%(选填)<input name="ivRank" value="${escapeHtml(item.ivRank || "")}" placeholder="上限见策略规则"></label>
+      </div>` : "";
+  /* 区间位置（策略 A/B 时显示；位置百分比与边界附近自动计算） */
+  const rangeFields = isExecuted && ["A", "B"].includes(item.strategyTag) ? `
+      <div class="decision-attr-grid wide obs-range-grid"><span class="decision-attr-title">区间位置（位置百分比/边界附近 自动计算）</span>
+      <label>区间下沿<input name="rangeLower" type="number" step="any" value="${item.rangeLower == null ? "" : escapeHtml(String(item.rangeLower))}"></label>
+      <label>区间上沿/前高<input name="rangeUpper" type="number" step="any" value="${item.rangeUpper == null ? "" : escapeHtml(String(item.rangeUpper))}"></label>
+      <label>当前价<input name="rangeCurrent" type="number" step="any" value="${item.rangeCurrent == null ? escapeHtml(String(item.close ?? "")) : escapeHtml(String(item.rangeCurrent))}"></label>
+      <label>位置百分比(自动)<span class="obs-auto" data-auto="rangePosPct">—</span></label>
+      <label>边界附近(自动)<span class="obs-auto" data-auto="nearEdge">—</span></label>
+      </div>` : "";
+  /* 纪律自查（开仓前填，默认折叠；勾选禁止项 → 软警告红字） */
+  const disciplineFields = isExecuted ? disciplineHtml(item) : "";
   const pnlField = `<label>盈亏(元,选填)<input name="myPnl" type="number" step="any" value="${item.myPnl == null ? "" : escapeHtml(String(item.myPnl))}" placeholder="亏损填负数"></label>`;
+  /* 持仓中：执行状态 + 随手笔记 */
+  const holdFields = tradeStatus === "open" ? `
+      <label>执行状态<select name="holdExecStatus">${option("", "—", item.holdExecStatus || "")}${option("on_plan", "按计划持有", item.holdExecStatus || "")}${option("minor_dev", "轻微偏离", item.holdExecStatus || "")}${option("major_dev", "严重偏离", item.holdExecStatus || "")}</select></label>
+      <label class="wide">随手笔记<textarea name="holdNotes" rows="2" placeholder="持仓中的观察/情绪与行为偏差">${escapeHtml(item.holdNotes || "")}</textarea></label>` : "";
+  /* 已平仓：结果 vs 预期 + 计划执行度 */
+  const resultFields = tradeStatus === "closed" ? `
+      <label>结果 vs 预期<select name="resultVsExpect">${option("", "—", item.resultVsExpect || "")}${option("better", "比预期好", item.resultVsExpect || "")}${option("as_expected", "符合预期", item.resultVsExpect || "")}${option("worse", "比预期差", item.resultVsExpect || "")}</select></label>
+      <label>预期差在哪<input name="resultGapNote" value="${escapeHtml(item.resultGapNote || "")}" placeholder="结果与预期的差异来源"></label>
+      <label>计划执行度<select name="planCompliance">${option("", "—", item.planCompliance || "")}${option("in_plan", "计划内", item.planCompliance || "")}${option("deviated", "计划内但偏离", item.planCompliance || "")}${option("unplanned", "完全计划外", item.planCompliance || "")}</select></label>` : "";
   const closeFields = `
-      <label class="wide">平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(item.closeNote || "")}</textarea></label>${pnlField}
+      <label class="wide">平仓<textarea name="closeNote" rows="2" placeholder="平仓过程与是否按计划执行">${escapeHtml(item.closeNote || "")}</textarea></label>${pnlField}${resultFields}
       <div class="decision-attr-grid wide"><span class="decision-attr-title">执行归因(复盘)</span>${attrField("judgment","判断错?")}${attrField("timing","时机错?")}${attrField("position","仓位错?")}${attrField("tool","工具错?")}${attrField("execution","执行错?")}</div>
       <label class="wide">最大错误与下一条规则<textarea name="reviewNote" rows="3" placeholder="最大错误:&#10;下一次只改:">${escapeHtml(item.reviewNote || "")}</textarea></label>
       <label class="wide">自我问答<textarea name="selfInquiry" rows="3" placeholder="这一笔交易中，哪些行为来自市场本身，哪些行为来自我对得失、对错和自我证明的执著？">${escapeHtml(item.selfInquiry || "")}</textarea></label>`;
   const statusFields = tradeStatus === "no_trade"
     ? `<label class="wide">未交易原因<input name="noTradeReason" value="${escapeHtml(item.noTradeReason || "")}"></label>`
     : tradeStatus === "open"
-      ? `${planFields}${pnlField}`
-      : `${planFields}${closeFields}`;
+      ? `${planFields}${optionFields}${rangeFields}${pnlField}${holdFields}`
+      : `${planFields}${optionFields}${rangeFields}${closeFields}`;
   const actions = mode === "draft"
     ? `<button class="decision-save${tradeStatus === "closed" ? " decision-publish" : ""}" type="submit">${tradeStatus === "closed" ? "发布归档" : "保存"}</button>
        <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
@@ -910,21 +1082,95 @@ function renderObservationEditor() {
        <button class="decision-delete" type="button" data-delete-observation="${escapeHtml(item.id)}">删除</button>
        <button class="decision-delete" type="button" data-cancel-observation-edit="1">取消</button>`;
   $("#decisionEditor").innerHTML = `<form id="observationForm" data-obs-id="${escapeHtml(item.id)}">
-    <header><div><small>${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))}</small>
+    <header><div><small>${escapeHtml(item.date || "日期缺失")} · 来源 ${escapeHtml(historySourceBadge(item.source))} · 编号 ${escapeHtml(item.id)}</small>
     <h3>${escapeHtml(item.variety || "")} ${escapeHtml(item.symbol || "")}</h3></div>
     <div class="decision-market-facts">${modeBadge}</div></header>
     <p class="decision-due">${dueText}</p>
     <details class="decision-evidence"><summary>查看当日席位证据</summary><div class="seat-rank-grid decision-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${ranking.netLong.length}/5 <span>${rankingDominance(ranking.netLong)}</span></div>${rankRows(ranking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${ranking.netShort.length}/5 <span>${rankingDominance(ranking.netShort)}</span></div>${rankRows(ranking.netShort, "bear-text", "暂无净空席位")}</div></div></details>
+    ${strategyEcho}
     <div class="decision-form-grid">
       <label class="wide status-primary">交易状态<select name="tradeStatus">${statusOptions}</select></label>
       ${matchBlock}${dateBlock}
       <label>方向<select name="direction">${option("", "未定", item.direction || "")}${option("多", "做多", item.direction || "")}${option("空", "做空", item.direction || "")}</select></label>
-      <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="为什么值得做,最关键的支撑和反向证据是什么">${escapeHtml(item.mainContradiction || "")}</textarea></label>
+      ${instrumentFields}
+      <label class="wide">核心逻辑<textarea name="mainContradiction" rows="2" placeholder="可证伪的一句话:预期什么、什么情况下自己是错的">${escapeHtml(item.mainContradiction || "")}</textarea></label>
       ${statusFields}
     </div>
+    ${disciplineFields}
     <p id="observationFormMessage" class="form-message" aria-live="polite"></p>
     <div class="decision-form-actions">${actions}</div>
   </form>`;
+  updateReviewAutoFields($("#observationForm"));
+}
+
+/* 纪律自查块：状态自评 6 项 + 禁止项 6 项（勾选 → 软警告，不拦截保存） */
+function disciplineHtml(item) {
+  const discipline = item.discipline || {};
+  const violationSet = new Set(item.violations || []);
+  return `<details class="decision-evidence obs-discipline">
+    <summary>纪律自查（开仓前填：状态自评 + 禁止项，勾选触发警告但不拦截）</summary>
+    <div class="decision-attr-grid obs-discipline-grid">
+      <span class="decision-attr-title">状态自评</span>
+      <label>睡眠(小时)<input name="sleepHours" value="${escapeHtml(discipline.sleepHours || "")}" placeholder="如 6.5"></label>
+      <label>情绪强度(0-10)<input name="emotionLevel" type="number" min="0" max="10" step="1" value="${discipline.emotionLevel == null ? "" : escapeHtml(String(discipline.emotionLevel))}"></label>
+      <label class="obs-check">刚止损(2h内)<input type="checkbox" name="justStopped" ${discipline.justStopped ? "checked" : ""}></label>
+      <label class="obs-check">刚睡醒<input type="checkbox" name="justWoke" ${discipline.justWoke ? "checked" : ""}></label>
+      <label class="obs-check">开盘30分钟内<input type="checkbox" name="withinOpen30" ${discipline.withinOpen30 ? "checked" : ""}></label>
+      <label class="wide">信息来源<input name="infoSource" value="${escapeHtml(discipline.infoSource || "")}" placeholder="驱动因素/数据来源；只有一个价格观察=说不清"></label>
+      <span class="decision-attr-title">禁止项自查（勾选 = 触发警示）</span>
+      ${VIOLATION_ITEMS.map(([key, label]) => `<label class="obs-check">${label}<input type="checkbox" name="violation_${key}" value="${key}" ${violationSet.has(key) ? "checked" : ""}></label>`).join("")}
+    </div>
+    <p class="obs-violation-warning" data-warn="violations" hidden></p>
+  </details>`;
+}
+
+/* 策略规则联动提示（只读摘要，改规则去「策略规则」面板） */
+function strategyEchoHtml(tag) {
+  const strategy = (state.strategies || []).find((entry) => entry.id === tag);
+  if (!strategy) return `<details class="decision-evidence strategy-echo"><summary>${REVIEW_TAG_LABELS[tag]} · 尚未填写规则</summary><div class="strategy-echo-body">去「策略规则」面板填写该策略的区间定义/止损线/期权门槛，填卡时这里会自动带出当前版本要点。</div></details>`;
+  const rules = strategy.rules || {};
+  const row = (label, value) => value ? `<span><small>${label}</small><b>${escapeHtml(String(value))}</b></span>` : "";
+  return `<details class="decision-evidence strategy-echo"><summary>${REVIEW_TAG_LABELS[tag]} · ${escapeHtml(strategy.name || "")} · v${strategy.version || 1}${strategy.revisions?.length ? ` · 修订 ${strategy.revisions.length} 次` : ""}</summary>
+    <div class="strategy-echo-body">
+    ${row("核心假设", rules.assumption)}${row("下沿", rules.lowerBound)}${row("上沿", rules.upperBound)}${row("失效条件", rules.invalidIf)}${row("入场规则", rules.entryRule)}
+    ${row("仓位规则", rules.positionRule)}${row("止损线①价格", rules.stopPrice)}${row("止损线②权利金%", rules.stopPremiumPct)}${row("止损线③时间", rules.stopTime)}
+    ${row("单笔占账户上限", rules.accountPctCap)}${row("IV分位上限", rules.ivRankCap)}${row("最小DTE", rules.minDte)}${row("边界阈值%", rules.edgePct)}
+    </div></details>`;
+}
+
+/* 自动计算与软警告的实时刷新（DTE/总成本/位置%/边界附近/禁止项计数） */
+function updateReviewAutoFields(form) {
+  if (!form || form.id !== "observationForm") return;
+  const item = currentEditingCard();
+  const set = (key, text) => { const el = form.querySelector(`[data-auto="${key}"]`); if (el) el.textContent = text; };
+  if (form.querySelector('[name="expiryDate"]')) {
+    const dte = reviewCalcDte(form.querySelector('[name="expiryDate"]')?.value, item?.date);
+    set("dte", dte == null ? "—" : dte < 0 ? "已到期" : `${dte} 天`);
+  }
+  if (form.querySelector('[name="lots"]') && form.querySelector('[name="premiumPerLot"]')) {
+    const lots = form.querySelector('[name="lots"]').value.trim();
+    const premium = form.querySelector('[name="premiumPerLot"]').value.trim();
+    set("totalCost", lots !== "" && premium !== "" ? `${formatSigned(Math.round(numeric(lots) * numeric(premium)), 0)} 元` : "—");
+  }
+  if (form.querySelector('[name="rangeLower"]')) {
+    const range = reviewAutoRange(form);
+    set("rangePosPct", range?.rangePosPct == null ? "—" : `${range.rangePosPct}%`);
+    set("nearEdge", range?.nearEdge == null ? "—" : range.nearEdge ? "是" : "否");
+  }
+  const warnEl = form.querySelector('[data-warn="violations"]');
+  if (warnEl) {
+    const count = currentViolationCount(form);
+    warnEl.hidden = count === 0;
+    if (count > 0) warnEl.textContent = `已触发 ${count} 项禁止项——仍可保存，但会记录在案（月度检视统计可见）。`;
+  }
+}
+
+function currentViolationCount(form) {
+  const checked = [...form.querySelectorAll('[name^="violation_"]:checked')];
+  let count = checked.length;
+  const emotion = form.querySelector('[name="emotionLevel"]')?.value;
+  if (emotion !== "" && emotion != null && numeric(emotion) >= 7 && !checked.some((el) => el.value === "emotion_high")) count += 1;
+  return count;
 }
 
 function collectKvPairs(form, prefix) {
@@ -988,11 +1234,16 @@ function historySourceBadge(source) {
 
 function historyInstrumentText(item) {
   const parts = [];
+  if (item.strategyTag && REVIEW_TAG_LABELS[item.strategyTag]) parts.push(REVIEW_TAG_LABELS[item.strategyTag]);
   if (item.instrumentType) parts.push(item.instrumentType);
   if (item.optionType) parts.push(item.optionType.toUpperCase());
   if (item.contract) parts.push(item.contract);
   else if (item.strike) parts.push(`行权价 ${item.strike}`);
   if (item.moneyness) parts.push(item.moneyness);
+  if (item.lots != null) parts.push(`${item.lots} 张`);
+  if (item.premiumPerLot != null) parts.push(`权利金 ${item.premiumPerLot}/张`);
+  if (item.totalCost != null) parts.push(`总成本 ${item.totalCost}`);
+  if (item.dte != null) parts.push(`DTE ${item.dte}`);
   if (item.direction) parts.push(item.direction === "空" ? "做空" : "做多");
   if (item.positionPct) parts.push(`仓位 ${item.positionPct}`);
   return parts.join(" · ");
@@ -1031,14 +1282,50 @@ function historyNarrativeText(item) {
   return `<p class="history-narrative">${escapeHtml(item.text || "")}</p>`;
 }
 
-/* 工作台日志的入场触发 / 仓位 / 止损失效（Excel 与 md 记录没有这些字段，自动跳过） */
+/* 工作台日志的计划字段（Excel 与 md 记录没有这些字段，自动跳过） */
 function historyPlanRows(item) {
   const rows = [];
   if (item.trigger) rows.push(["入场触发", item.trigger]);
   if (item.positionPct) rows.push(["仓位", item.positionPct]);
   if (item.stopLossTakeProfit) rows.push(["止损 / 失效", item.stopLossTakeProfit]);
+  if (item.stopPrice) rows.push(["止损①价格", item.stopPrice]);
+  if (item.stopPremiumPct) rows.push(["止损②权利金", `${item.stopPremiumPct}%`]);
+  if (item.stopTime) rows.push(["止损③时间", item.stopTime]);
+  if (item.rangeLower != null && item.rangeUpper != null) {
+    const rangeText = `${item.rangeLower} ~ ${item.rangeUpper}${item.rangePosPct != null ? ` · 位置 ${item.rangePosPct}%${item.nearEdge != null ? (item.nearEdge ? " · 边界附近" : " · 区间内") : ""}` : ""}`;
+    rows.push(["区间位置", rangeText]);
+  }
+  if (item.accountPct) rows.push(["占账户", `${item.accountPct}%`]);
+  if (item.ivRank) rows.push(["IV 分位", `${item.ivRank}%`]);
   if (!rows.length) return "";
-  return `<div class="history-plan">${rows.map(([label, value]) => `<span><small>${label}</small><b>${escapeHtml(value)}</b></span>`).join("")}</div>`;
+  return `<div class="history-plan">${rows.map(([label, value]) => `<span><small>${label}</small><b>${escapeHtml(String(value))}</b></span>`).join("")}</div>`;
+}
+
+/* v2 复盘补充块：纪律自查（含禁止项）/ 持仓执行状态 / 结果 vs 预期 */
+function historyReviewExtra(item) {
+  if (item.source !== "工作台日志" && item.source !== "工作台决策") return "";
+  const parts = [];
+  const discipline = item.discipline;
+  if (discipline && Object.values(discipline).some((v) => v !== "" && v != null && v !== false)) {
+    const bits = [];
+    if (discipline.sleepHours) bits.push(`睡眠 ${discipline.sleepHours}h`);
+    if (discipline.emotionLevel != null) bits.push(`情绪 ${discipline.emotionLevel}`);
+    if (discipline.justStopped) bits.push("刚止损");
+    if (discipline.justWoke) bits.push("刚睡醒");
+    if (discipline.withinOpen30) bits.push("开盘30分钟内");
+    if (discipline.infoSource) bits.push(`来源：${discipline.infoSource}`);
+    if (bits.length) parts.push(`<span><small>状态自评</small><b>${escapeHtml(bits.join(" · "))}</b></span>`);
+  }
+  const violations = item.violations || [];
+  if (violations.length) {
+    const labels = violations.map((key) => VIOLATION_ITEMS.find(([k]) => k === key)?.[1] || key).join("、");
+    parts.push(`<span class="history-violation"><small>禁止项</small><b>${escapeHtml(labels)}</b></span>`);
+  }
+  if (item.holdExecStatus) parts.push(`<span><small>执行状态</small><b>${escapeHtml({on_plan: "按计划持有", minor_dev: "轻微偏离", major_dev: "严重偏离"}[item.holdExecStatus] || item.holdExecStatus)}</b></span>`);
+  if (item.resultVsExpect) parts.push(`<span><small>结果 vs 预期</small><b>${escapeHtml({better: "比预期好", as_expected: "符合预期", worse: "比预期差"}[item.resultVsExpect] || item.resultVsExpect)}${item.resultGapNote ? ` · ${escapeHtml(item.resultGapNote)}` : ""}</b></span>`);
+  if (item.planCompliance) parts.push(`<span><small>计划执行度</small><b>${escapeHtml({in_plan: "计划内", deviated: "计划内但偏离", unplanned: "完全计划外"}[item.planCompliance] || item.planCompliance)}</b></span>`);
+  if (!parts.length) return "";
+  return `<div class="history-plan history-review-extra">${parts.join("")}</div>`;
 }
 
 function renderHistoryEntry(item) {
@@ -1057,6 +1344,7 @@ function renderHistoryEntry(item) {
       <button class="history-edit-btn history-delete-btn" type="button" data-delete-observation="${escapeHtml(item.id)}" title="删除这条复盘(本地+云端,不可恢复)">删除</button>
     </header>
     ${historyPlanRows(item)}
+    ${historyReviewExtra(item)}
     ${pnl.text ? `<div class="history-pnl ${pnl.cls}">${escapeHtml(pnl.text)}</div>` : ""}
     ${historyEventChain(item.events)}
     ${historyRatingDots(item.ratings)}
@@ -1112,10 +1400,184 @@ function renderHistoryView() {
   }
 
   const group = groups[state.historyJournalSymbol];
-  if (!group) { $("#historyTimeline").innerHTML = `<div class="detail-empty">暂无历史数据。先运行 scripts/import_trading_log_excel.py 与 scripts/import_monthly_review_md.py 生成 data/imported/ 下的 JSON。</div>`; return; }
-  const items = [...group.items].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
-  const executedPnl = items.filter((item) => item.executed).reduce((sum, item) => sum + (item.myPnl || 0), 0);
-  $("#historyTimeline").innerHTML = `<div class="history-timeline-head"><h3>${escapeHtml(group.variety)} ${escapeHtml(group.symbol)}</h3><span>${items.length} 条记录 · ${items.filter((item) => item.executed).length} 次执行 · 已执行盈亏 <b class="${signClass(executedPnl)}">${formatSigned(executedPnl, 0)} 元</b></span></div>${items.map(renderHistoryEntry).join("")}`;
+  if (!group) { $("#historyTimeline").innerHTML = `<div class="detail-empty">暂无历史数据。先运行 scripts/import_trading_log_excel.py 与 scripts/import_monthly_review_md.py 生成 data/imported/ 下的 JSON。</div>`; }
+  else {
+    const items = [...group.items].sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const executedPnl = items.filter((item) => item.executed).reduce((sum, item) => sum + (item.myPnl || 0), 0);
+    $("#historyTimeline").innerHTML = `<div class="history-timeline-head"><h3>${escapeHtml(group.variety)} ${escapeHtml(group.symbol)}</h3><span>${items.length} 条记录 · ${items.filter((item) => item.executed).length} 次执行 · 已执行盈亏 <b class="${signClass(executedPnl)}">${formatSigned(executedPnl, 0)} 元</b></span></div>${items.map(renderHistoryEntry).join("")}`;
+  }
+  renderStrategyRules();
+  renderMonthlyReview();
+}
+
+/* ===================== 策略规则卡面板（v2） =====================
+   区间回归与突破是两个方向相反的策略，分开记账；规则是稳定文件，
+   改一次写进修订记录（版本自动递增）。存 localStorage + strategies.json
+   云端同步；填复盘卡选 A/B 时编辑器侧栏自动带出当前版本要点。 */
+const STRATEGY_RULE_FIELDS = [
+  {key: "assumption", label: "核心假设", wide: true, placeholder: "A: 价格在 [下沿,上沿] 内震荡，触及边界后回归"},
+  {key: "lowerBound", label: "区间下沿定义", placeholder: "如 近20日最低价 / 固定价位——必须写死，不能盘感"},
+  {key: "upperBound", label: "上沿 / 前高定义", placeholder: "如 近20日最高价 / 固定价位"},
+  {key: "validIf", label: "区间有效性条件", placeholder: "如 至少被测试 3 次且未收盘突破"},
+  {key: "invalidIf", label: "区间失效条件", placeholder: "如 收盘突破任一边界 → 区间作废，策略停用"},
+  {key: "entryRule", label: "入场规则", wide: true, placeholder: "A: 下沿附近买 call / 上沿附近买 put；B: 突破需几条确认"},
+  {key: "positionRule", label: "仓位规则", placeholder: "如 单笔 ≤1.5% 账户；方向冲突时折减"},
+  {key: "stopPrice", label: "止损线①价格", placeholder: "标的价格到哪离场"},
+  {key: "stopPremiumPct", label: "止损线②权利金%", placeholder: "参考 -40"},
+  {key: "stopTime", label: "止损线③时间", placeholder: "如 事件前一周 / DTE≤30"},
+  {key: "accountPctCap", label: "单笔占账户上限%", placeholder: "参考 1.5"},
+  {key: "ivRankCap", label: "IV 分位上限%", placeholder: "参考 60"},
+  {key: "minDte", label: "最小 DTE(天)", placeholder: "参考 45"},
+  {key: "edgePct", label: "边界附近阈值%", placeholder: "参考 5（区间位置自动判定用）"},
+  {key: "conflictRule", label: "方向冲突处理", wide: true, placeholder: "A 与 B 信号相反时的处理规则"},
+  {key: "pendingBlanks", label: "待补空白清单", wide: true, placeholder: "必须自己填的项（依赖账户规模与风险承受度）"},
+];
+
+function renderStrategyRules() {
+  const container = $("#strategyRulesList");
+  if (!container) return;
+  if (!state.strategies.length && typeof HistoryStore !== "undefined" && HistoryStore.loadStrategies) state.strategies = HistoryStore.loadStrategies();
+  const list = state.strategies.filter((s) => !s.deleted);
+  container.innerHTML = ["A", "B"].map((id) => {
+    const strategy = list.find((s) => s.id === id);
+    if (!strategy) return "";
+    const rules = strategy.rules || {};
+    const revisions = strategy.revisions || [];
+    const filled = Object.values(rules).filter((v) => v != null && String(v).trim() !== "").length;
+    const revised = new Date(strategy.updated || 0);
+    const revisedText = strategy.updated ? `${revised.getFullYear()}-${String(revised.getMonth() + 1).padStart(2, "0")}-${String(revised.getDate()).padStart(2, "0")}` : "未填写";
+    return `<details class="strategy-rule-card" data-strategy-card="${id}">
+      <summary><b>${id} · ${escapeHtml(strategy.name || "")}</b><span>v${strategy.version || 1} · ${filled}/${STRATEGY_RULE_FIELDS.length} 项已填 · 修订 ${revisions.length} 次 · ${revisedText}</span></summary>
+      <form data-strategy-form="${id}">
+        <div class="strategy-rules-grid">
+          ${STRATEGY_RULE_FIELDS.map((f) => `<label class="${f.wide ? "wide" : ""}">${escapeHtml(f.label)}<input name="rule_${f.key}" value="${escapeHtml(String(rules[f.key] == null ? "" : rules[f.key]))}" placeholder="${escapeHtml(f.placeholder || "")}"></label>`).join("")}
+        </div>
+        <div class="strategy-rules-grid strategy-revision-inputs">
+          <span class="decision-attr-title">本次修订（保存时写进修订记录，版本自动 +1）</span>
+          <label>改了什么<input name="revChange" placeholder="本次修订说明"></label>
+          <label>为什么改<input name="revReason" placeholder="修订原因"></label>
+        </div>
+        <div class="strategy-form-actions">
+          <button class="decision-save" type="submit">保存规则</button>
+          <span class="form-message" data-strategy-message="${id}" aria-live="polite"></span>
+        </div>
+        ${revisions.length ? `<div class="strategy-revisions"><span class="decision-attr-title">修订记录</span>${[...revisions].reverse().map((rev) => `<span class="strategy-revision-row"><small>${escapeHtml(rev.date || "")} · v${escapeHtml(String(rev.version || ""))}</small><b>${escapeHtml(rev.change || "")}</b><i>${escapeHtml(rev.reason || "")}</i></span>`).join("")}</div>` : ""}
+      </form>
+    </details>`;
+  }).join("") + `<p class="strategy-hint">计划外交易（策略归属=计划外）不设规则卡——它的统计出现在下方月度检视里，用期望差说话。</p>`;
+}
+
+function handleStrategyFormSubmit(event) {
+  event.preventDefault();
+  const id = event.target.dataset.strategyForm;
+  const form = event.target;
+  const message = form.querySelector(`[data-strategy-message="${id}"]`);
+  const strategy = state.strategies.find((s) => s.id === id);
+  if (!strategy) return;
+  const values = Object.fromEntries(new FormData(form));
+  const rules = {};
+  STRATEGY_RULE_FIELDS.forEach((f) => {
+    const raw = (values[`rule_${f.key}`] ?? "").trim();
+    if (raw !== "") rules[f.key] = raw;
+  });
+  const changed = JSON.stringify(rules) !== JSON.stringify(strategy.rules || {});
+  const revChange = (values.revChange || "").trim();
+  const revReason = (values.revReason || "").trim();
+  if (!changed && !revChange) {
+    if (message) { message.textContent = "规则无改动。"; message.className = "form-message"; }
+    return;
+  }
+  if (changed) {
+    strategy.rules = rules;
+    strategy.version = (strategy.version || 1) + 1;
+    strategy.revisions = strategy.revisions || [];
+    strategy.revisions.push({
+      date: new Date().toISOString().slice(0, 10),
+      version: strategy.version,
+      change: revChange || "参数调整（未填说明）",
+      reason: revReason || "",
+    });
+  }
+  HistoryStore.saveStrategy(strategy);
+  state.strategies = HistoryStore.loadStrategies ? HistoryStore.loadStrategies() : state.strategies;
+  renderStrategyRules();
+  renderMonthlyReview();
+  /* 编辑中的复盘卡联动刷新规则要点 */
+  const editing = currentEditingCard();
+  if (editing && ["A", "B"].includes(editing.strategyTag)) renderObservationEditor();
+  if (message) { message.textContent = `已保存 v${strategy.version}（本地）。点「云端同步」推送到私有仓跨设备生效。`; message.className = "form-message strategy-saved"; }
+}
+
+/* ===================== 月度检视面板（v2） =====================
+   统计口径：已发布归档 + 已执行 + 盈亏非空的记录（observations + trades）。
+   自动算分策略胜率/期望、计划内外期望差、止损后 2h 反向、空白拦截；
+   策略规则卡的月度 6 问挂在统计下，其中 4 问可由数据直接回答。 */
+function monthlyReviewItems() {
+  const history = state.history;
+  if (!history) return [];
+  const observations = (history.observations || []).filter((item) => !item.deleted && obsStatus(item) === "published");
+  return [...observations, ...(history.trades || [])].filter((item) => item.executed && item.myPnl != null);
+}
+
+function renderMonthlyReview() {
+  const container = $("#monthlyReviewPanel");
+  if (!container) return;
+  const all = monthlyReviewItems();
+  const months = [...new Set(all.map((item) => (item.date || "").slice(0, 7)).filter(Boolean))].sort().reverse();
+  const month = state.monthlyReviewMonth || "all";
+  const items = month === "all" ? all : all.filter((item) => (item.date || "").slice(0, 7) === month);
+
+  const statBlock = (records) => {
+    const wins = records.filter((r) => r.myPnl > 0).length;
+    const total = records.reduce((sum, r) => sum + r.myPnl, 0);
+    return {count: records.length, winRate: records.length ? Math.round((wins / records.length) * 100) : null, avg: records.length ? Math.round(total / records.length) : null, total};
+  };
+  const byStrategy = [["A", "A 区间回归"], ["B", "B 突破"], ["unplanned", "计划外"], [null, "未标注"]].map(([tag, label]) => {
+    const rows = items.filter((r) => (r.strategyTag || null) === tag);
+    return {label, ...statBlock(rows)};
+  }).filter((r) => r.count);
+  const overall = statBlock(items);
+
+  const inPlan = items.filter((r) => r.planCompliance === "in_plan");
+  const outPlan = items.filter((r) => r.planCompliance && r.planCompliance !== "in_plan");
+  const inStat = statBlock(inPlan);
+  const outStat = statBlock(outPlan);
+
+  const reversals = items.filter((r) => (r.violations || []).includes("reversal_after_stop"));
+  const reversalStat = statBlock(reversals);
+  const violationCount = items.filter((r) => (r.violations || []).length).length;
+  /* 空白拦截：工作台写的已执行记录，期权结构有缺或勾了禁止项 = 开仓前本该被拦 */
+  const blankBlocked = items.filter((r) => {
+    if (!["工作台日志", "工作台决策"].includes(r.source)) return false;
+    if ((r.violations || []).length) return true;
+    if (r.instrumentType === "期权") return !r.optionType || r.strike == null || !r.expiryDate || r.lots == null || r.premiumPerLot == null;
+    return false;
+  }).length;
+
+  const fmt = (v) => v == null ? "—" : `${formatSigned(v, 0)} 元`;
+  const pct = (v) => v == null ? "—" : `${v}%`;
+  const strategyTable = byStrategy.length ? `<table class="monthly-table"><thead><tr><th>策略</th><th>笔数</th><th>胜率</th><th>平均盈亏</th><th>合计</th></tr></thead><tbody>
+    ${byStrategy.map((row) => `<tr><td>${escapeHtml(row.label)}</td><td>${row.count}</td><td class="${row.winRate != null && row.winRate >= 50 ? "bull-text" : row.winRate != null && row.winRate < 50 ? "bear-text" : ""}">${pct(row.winRate)}</td><td class="${signClass(row.avg)}">${fmt(row.avg)}</td><td class="${signClass(row.total)}">${fmt(row.total)}</td></tr>`).join("")}
+    <tr class="monthly-total"><td>合计</td><td>${overall.count}</td><td>${pct(overall.winRate)}</td><td class="${signClass(overall.avg)}">${fmt(overall.avg)}</td><td class="${signClass(overall.total)}">${fmt(overall.total)}</td></tr>
+    </tbody></table>` : `<div class="detail-empty">还没有已执行且带盈亏的归档记录——发布几张复盘卡后这里会出现分策略统计。</div>`;
+
+  const questions = [
+    {q: "策略 A 和 B 各自的胜率、平均盈亏、期望值？", a: byStrategy.length ? "见上表（分策略统计）" : "尚无数据"},
+    {q: "计划内交易和计划外交易的期望值差多少？", a: inStat.count || outStat.count ? `计划内 ${inStat.count} 笔平均 ${fmt(inStat.avg)} · 计划外/偏离 ${outStat.count} 笔平均 ${fmt(outStat.avg)}${inStat.avg != null && outStat.avg != null ? ` · 期望差 ${fmt(inStat.avg - outStat.avg)}` : ""}` : "旧记录还没有计划执行度标注——新发布的复盘卡会填这一项"},
+    {q: "上个月有几笔是「止损后 2 小时内同标的反向」？结果如何？", a: reversalStat.count ? `${reversalStat.count} 笔，合计 ${fmt(reversalStat.total)}，胜率 ${pct(reversalStat.winRate)}` : "0 笔（或老记录未标注）"},
+    {q: "「大概率向上突破」这个判断，被数据支持还是被推翻？", a: "人工回答——看 B 策略行与当月行情"},
+    {q: "有几笔交易是因为「开仓前卡有空白」本该被拦截的？", a: `${blankBlocked} 笔（工作台记录中期权结构有缺或触发禁止项）`},
+    {q: "区间回归策略在这个月的市况里，是否本来就该停用？", a: "人工回答——结合 A 策略行与区间失效次数"},
+  ];
+
+  container.innerHTML = `
+    <div class="monthly-controls"><label>统计范围<select data-monthly-month>
+      <option value="all" ${month === "all" ? "selected" : ""}>全部月份</option>
+      ${months.map((m) => `<option value="${m}" ${month === m ? "selected" : ""}>${m}</option>`).join("")}
+    </select></label>
+    <span class="monthly-caption">${overall.count} 笔已执行带盈亏的归档记录 · 触发禁止项的 ${violationCount} 笔</span></div>
+    ${strategyTable}
+    <ol class="monthly-questions">${questions.map((item) => `<li><b>${escapeHtml(item.q)}</b><span>${escapeHtml(item.a)}</span></li>`).join("")}</ol>`;
 }
 
 /* 品种选择器下拉选项：按搜索词过滤（只重建 options，不重建搜索框，输入焦点不丢） */
@@ -1223,6 +1685,17 @@ function setDate(date) {
 }
 
 function bindEvents() {
+  /* 策略规则卡：表单提交（事件委托——面板内容动态重建） */
+  const strategyList = document.getElementById("strategyRulesList");
+  if (strategyList) strategyList.addEventListener("submit", handleStrategyFormSubmit);
+  /* 月度检视：统计范围切换 */
+  const monthlyPanel = document.getElementById("monthlyReviewPanel");
+  if (monthlyPanel) monthlyPanel.addEventListener("change", (event) => {
+    if (!event.target.matches("[data-monthly-month]")) return;
+    state.monthlyReviewMonth = event.target.value;
+    renderMonthlyReview();
+  });
+
   document.addEventListener("click", (event) => {
     const railToggle = event.target.closest("#railToggle");
     if (railToggle) {
@@ -1285,14 +1758,25 @@ function bindEvents() {
     const unpublishObs = event.target.closest("[data-unpublish-observation]");
     if (unpublishObs) unpublishObservationCard(unpublishObs.dataset.unpublishObservation);
   });
-  /* 交易状态是一级选择：切换时把当前已填内容先并回卡片再重渲染，输入不丢 */
+  /* 交易状态/工具类型/策略归属是一级联动选择：切换时把当前已填内容先并回卡片再重渲染，输入不丢 */
   $("#decisionEditor").addEventListener("change", (event) => {
-    if (event.target.name !== "tradeStatus") return;
+    if (!["tradeStatus", "instrumentType", "strategyTag"].includes(event.target.name)) return;
     const item = currentEditingCard();
     const form = $("#observationForm");
     if (!item || !form) return;
     Object.assign(item, collectFormIntoObservation(item, form).out);
     renderObservationEditor();
+  });
+  /* 期权/区间字段实时自动计算（DTE/总成本/位置%/边界附近）+ 禁止项软警告计数 */
+  $("#decisionEditor").addEventListener("input", (event) => {
+    const form = $("#observationForm");
+    if (!form || !event.target.closest || !event.target.closest("#observationForm")) return;
+    updateReviewAutoFields(form);
+  });
+  /* 勾选禁止项/情绪强度变化也走实时刷新（change 不触发 input） */
+  $("#decisionEditor").addEventListener("change", (event) => {
+    if (!/^violation_/.test(event.target.name || "") && event.target.name !== "emotionLevel") return;
+    updateReviewAutoFields($("#observationForm"));
   });
   /* 品种历史操作回看：搜索框只重建下拉 options（焦点不丢），下拉选中切换右侧时间线 */
   $("#historySymbolList").addEventListener("input", (event) => {
@@ -1316,6 +1800,23 @@ function bindEvents() {
     const {out: updated, values} = collectFormIntoObservation(item, form);
     const mode = obsStatus(item) === "published" ? "published" : "draft";
     const publishing = mode === "draft" && values.tradeStatus === "closed";
+    /* 期权结构必填（D4：结构字段缺一不许保存；IV/占账户比选填） */
+    if (values.tradeStatus !== "no_trade" && updated.instrumentType === "期权") {
+      const missing = [];
+      if (!updated.optionType) missing.push("方向");
+      if (updated.strike == null || updated.strike === "") missing.push("行权价");
+      if (!updated.expiryDate) missing.push("到期日");
+      if (updated.lots == null) missing.push("张数");
+      if (updated.premiumPerLot == null) missing.push("权利金/张");
+      if (missing.length) {
+        message.textContent = `期权结构必填缺 ${missing.length} 项：${missing.join(" / ")}（IV 分位与占账户比例为选填）。`;
+        return;
+      }
+    }
+    /* 策略归属提醒（软：未归属可保存，但发布前提示） */
+    if (publishing && updated.instrumentType === "期权" && !updated.strategyTag) {
+      if (!window.confirm("这张期权卡没有策略归属（A 区间回归 / B 突破 / 计划外）。\n按「交易日记卡」纪律：无法明确勾选 → 不该下单。\n仍要继续发布？")) return;
+    }
     if (values.tradeStatus === "closed" && !(values.closeNote || "").trim()) {
       message.textContent = publishing ? "发布前必须填写平仓记录（平仓过程与是否按计划执行）。" : "已平仓必须填写平仓记录。";
       return;
@@ -1330,7 +1831,9 @@ function bindEvents() {
       return;
     }
     if (publishing) {
-      if (!window.confirm(`确认发布「${item.variety || item.symbol}」？\n发布 = 该品种已平仓，此卡将固定到下方归档记录（之后仍可撤回或修订）。`)) return;
+      const violationCount = (updated.violations || []).length;
+      const violationNote = violationCount ? `\n注意：本卡触发 ${violationCount} 项禁止项，将记录在案（月度检视统计可见）。` : "";
+      if (!window.confirm(`确认发布「${item.variety || item.symbol}」？\n发布 = 该品种已平仓，此卡将固定到下方归档记录（之后仍可撤回或修订）。${violationNote}`)) return;
       updated.status = "published";
       updated.publishedAt = new Date().toISOString();
     }
@@ -1570,6 +2073,18 @@ dashboardLoad
     /* 首屏已出，后台链并行推进，各自只做最小重渲染 */
     historyLoad.then((history) => {
       state.history = history || {observations: [], trades: [], narratives: [], months: [], errors: []};
+      /* 策略规则卡 v2：本地优先立即渲染；有 Token 时后台拉远端，落新后重刷面板 */
+      if (typeof HistoryStore !== "undefined" && HistoryStore.loadStrategies) {
+        state.strategies = HistoryStore.loadStrategies();
+        HistoryStore.pullStrategiesFromCloud().then((merged) => {
+          if (merged && merged.length) {
+            state.strategies = merged;
+            renderStrategyRules();
+            const editing = currentEditingCard();
+            if (editing && editing.strategyTag) renderObservationEditor();
+          }
+        });
+      }
       renderDecisionView();
       renderHistoryView();
       renderCloudSyncStatus();
@@ -1618,13 +2133,19 @@ function cloudSyncAction() {
   if (btn) { btn.textContent = "⏳ 同步中…"; btn.disabled = true; }
   HistoryStore.pushToCloud()
     .then((result) => {
+      /* 复盘数据同步完成后串行推策略规则（strategies.json，独立文件，互不干扰） */
+      return (HistoryStore.pushStrategiesToCloud ? HistoryStore.pushStrategiesToCloud() : Promise.resolve(null)).then(() => result);
+    })
+    .then((result) => {
+      if (HistoryStore.loadStrategies) state.strategies = HistoryStore.loadStrategies();
+      renderStrategyRules();
       renderCloudSyncStatus();
       if (btn) { btn.textContent = "🔐 云端同步"; btn.disabled = false; }
       if (result.local) {
         if (status) status.textContent = "（未配置 Token，仅本地）";
       } else {
         const count = (result.data.observations || []).length + (result.data.trades || []).length;
-        if (status) status.textContent = `✓ 已同步 ${count} 条`;
+        if (status) status.textContent = `✓ 已同步 ${count} 条复盘 + 策略规则`;
         renderHistoryView();
       }
     })

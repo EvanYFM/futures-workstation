@@ -346,6 +346,60 @@ const HistoryStore = (() => {
     return {unsynced: unsynced, lastPushAt: lastPushAt};
   }
 
+  /* ---------- 策略规则卡（v2）：localStorage 本地优先 + strategies.json 云端同步 ----------
+     数据量小（几 KB），不上 IndexedDB；独立文件存储的原因见 journal-sync.js 注释。 */
+  var STRAT_KEY = "fs_strategies_v2";
+  const DEFAULT_STRATEGY_RULES = {
+    A: {id: "A", name: "区间回归", version: 1, rules: {}, revisions: []},
+    B: {id: "B", name: "向上突破", version: 1, rules: {}, revisions: []},
+  };
+
+  function loadStrategies() {
+    let list = [];
+    try { list = JSON.parse(localStorage.getItem(STRAT_KEY) || "[]"); } catch (e) { list = []; }
+    if (!Array.isArray(list)) list = [];
+    ["A", "B"].forEach((id) => {
+      if (!list.some((s) => s.id === id)) {
+        list.push(JSON.parse(JSON.stringify(DEFAULT_STRATEGY_RULES[id])));
+        localStorage.setItem(STRAT_KEY, JSON.stringify(list));
+      }
+    });
+    return list.filter((s) => !s.deleted).concat(list.filter((s) => s.deleted));
+  }
+
+  function saveStrategy(strategy) {
+    const list = loadStrategies();
+    strategy.updated = Date.now();
+    const idx = list.findIndex((s) => s.id === strategy.id);
+    if (idx >= 0) list[idx] = strategy; else list.push(strategy);
+    localStorage.setItem(STRAT_KEY, JSON.stringify(list));
+    unsynced += 1;
+    return strategy;
+  }
+
+  function pushStrategiesToCloud() {
+    if (typeof JournalSync === "undefined" || !JournalSync.hasToken() || !JournalSync.syncStrategies) {
+      return Promise.resolve({local: true, data: loadStrategies()});
+    }
+    return JournalSync.syncStrategies(loadStrategies()).then((result) => {
+      const merged = result.data || [];
+      localStorage.setItem(STRAT_KEY, JSON.stringify(merged));
+      return {data: merged, ok: true};
+    });
+  }
+
+  /* 启动时拉取远端策略规则（不推送）：有 Token 才发请求，失败静默——本地规则永远可用 */
+  function pullStrategiesFromCloud() {
+    if (typeof JournalSync === "undefined" || !JournalSync.hasToken() || !JournalSync.pullStrategies) return Promise.resolve(null);
+    return JournalSync.pullStrategies().then((r) => {
+      if (!r || !Array.isArray(r.data)) return null;
+      const local = loadStrategies();
+      const merged = JournalSync.mergeStrategies(local, r.data);
+      localStorage.setItem(STRAT_KEY, JSON.stringify(merged));
+      return merged;
+    }).catch(() => null);
+  }
+
   /* 导出：只包含本地工作台新写的 observation（source=工作台日志），不含静态
      Excel/md 导入项与已删除的墓碑记录，避免推送时重复/复活。Agent 收到后追加到
      data/imported/user_journal.json，下次刷新页面自动展示 */
@@ -360,5 +414,6 @@ const HistoryStore = (() => {
     };
   }
 
-  return {init, cache: () => cache, putObservation, exportUserJournal, pushToCloud, syncState, hasCloudToken: () => typeof JournalSync !== "undefined" && JournalSync.hasToken()};
+  return {init, cache: () => cache, putObservation, exportUserJournal, pushToCloud, syncState, hasCloudToken: () => typeof JournalSync !== "undefined" && JournalSync.hasToken(),
+    loadStrategies, saveStrategy, pushStrategiesToCloud, pullStrategiesFromCloud};
 })();

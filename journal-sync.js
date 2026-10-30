@@ -134,6 +134,32 @@ var JournalSync = (function () {
     return pull(JOURNAL_PATH);
   }
 
+  /* ---------- 策略规则卡（strategies.json，v2 新增） ----------
+     独立文件而非并入 journal.json：旧版客户端的 mergeJournal 只重建
+     observations/trades/narratives/months 四键——并入主文件的话，其他设备
+     还没刷新到新代码时一次同步就会把 strategies 整键丢掉（9-24 覆盖事故
+     同源教训）。独立文件旧客户端永不读写，天然安全。
+     同 id + updated 新者胜；deleted 墓碑防复活。 */
+  var STRATEGIES_PATH = "strategies.json";
+
+  function mergeStrategies(local, remote) {
+    var out = {};
+    (remote || []).forEach(function (s) { out[s.id] = s; });
+    (local || []).forEach(function (s) {
+      if (!out[s.id] || Number(s.updated || 0) >= Number((out[s.id] || {}).updated || 0)) out[s.id] = s;
+    });
+    return Object.keys(out).map(function (k) { return out[k]; });
+  }
+
+  function syncStrategies(localList) {
+    return sync(STRATEGIES_PATH, localList, mergeStrategies);
+  }
+
+  function pullStrategies() {
+    return pull(STRATEGIES_PATH);
+  }
+
   return {token: token, setToken: setToken, hasToken: hasToken,
-    pullJournal: pullJournal, syncJournal: syncJournal, mergeJournal: mergeJournal};
+    pullJournal: pullJournal, syncJournal: syncJournal, mergeJournal: mergeJournal,
+    syncStrategies: syncStrategies, pullStrategies: pullStrategies, mergeStrategies: mergeStrategies};
 })();
