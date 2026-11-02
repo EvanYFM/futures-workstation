@@ -322,6 +322,118 @@ function renderStockVal() {
     `<tr><td colspan="5" style="color:var(--ink3);text-align:left">${STOCK_VAL.source} · 截至 ${STOCK_VAL.as_of} · ${STOCK_VAL.note}</td></tr>`;
 }
 
+/* ══════════ ⑨ 通胀与实际利率 ══════════ */
+function alignTo(dates, rows) {
+  const m = new Map((rows || []).map(r => [r[0], r[1]]));
+  return dates.map(d => (m.has(d) ? m.get(d) : null));
+}
+
+function renderInflation(I, t) {
+  const ids = ['ch-be-oil', 'ch-real-gold', 'ch-goldoil', 'ch-cpi-10y'];
+  if (!I || !I.series) {
+    $('infl-desc').textContent = '该快照不含通胀模块（20261102 起启用）。';
+    ids.forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    return;
+  }
+  const S = I.series;
+  const LEG = { top: 2, itemWidth: 14, itemHeight: 8, icon: 'roundRect', textStyle: { color: t.text, fontSize: 11 } };
+  $('infl-note').textContent = I.source ? `${I.source} · ${I.note || ''}` : (I.note || '');
+  const AX2 = { ...AX, splitLine: { show: false } };
+
+  // ① 盈亏平衡 vs WTI
+  const be = S.be10 || [];
+  const beDates = be.map(r => r[0]);
+  const c1 = makeChart('ch-be-oil');
+  if (c1) {
+    c1.setOption({
+      tooltip: { ...TIP, trigger: 'axis' },
+      legend: { ...LEG, data: ['10Y 盈亏平衡(%)', 'WTI($)'] },
+      grid: { left: 52, right: 58, top: 34, bottom: 26 },
+      xAxis: { type: 'category', data: beDates, ...AX },
+      yAxis: [
+        { type: 'value', name: '%', scale: true, ...AX },
+        { type: 'value', name: '$', scale: true, ...AX2 },
+      ],
+      series: [
+        { name: '10Y 盈亏平衡(%)', type: 'line', showSymbol: false, color: t.gold, itemStyle: { color: t.gold }, data: be.map(r => r[1]),
+          lineStyle: { color: t.gold, width: 1.5 } },
+        { name: 'WTI($)', type: 'line', yAxisIndex: 1, showSymbol: false, color: t.accent, itemStyle: { color: t.accent },
+          data: alignTo(beDates, S.wti), lineStyle: { color: t.accent, width: 1.4 } },
+      ],
+    });
+  }
+
+  // ② 实际利率 vs 黄金
+  const real = S.real10 || [];
+  const rDates = real.map(r => r[0]);
+  const c2 = makeChart('ch-real-gold');
+  if (c2) {
+    c2.setOption({
+      tooltip: { ...TIP, trigger: 'axis' },
+      legend: { ...LEG, data: ['10Y 实际利率(%)', '黄金($)'] },
+      grid: { left: 52, right: 62, top: 34, bottom: 26 },
+      xAxis: { type: 'category', data: rDates, ...AX },
+      yAxis: [{ type: 'value', name: '%', scale: true, ...AX },
+              { type: 'value', name: '$', scale: true, ...AX2 }],
+      series: [
+        { name: '10Y 实际利率(%)', type: 'line', showSymbol: false, color: t.accent, itemStyle: { color: t.accent }, data: real.map(r => r[1]),
+          lineStyle: { color: t.accent, width: 1.5 } },
+        { name: '黄金($)', type: 'line', yAxisIndex: 1, showSymbol: false, color: t.gold, itemStyle: { color: t.gold },
+          data: alignTo(rDates, S.gold), lineStyle: { color: t.gold, width: 1.4 } },
+      ],
+    });
+  }
+
+  // ③ 金油比 vs 标普（归一化=100）
+  const go = S.gold_oil_idx || [];
+  const gDates = go.map(r => r[0]);
+  const c3 = makeChart('ch-goldoil');
+  if (c3) {
+    c3.setOption({
+      tooltip: { ...TIP, trigger: 'axis' },
+      legend: { ...LEG, data: ['金油比(归一)', '标普500(归一)'] },
+      grid: { left: 48, right: 20, top: 34, bottom: 26 },
+      xAxis: { type: 'category', data: gDates, ...AX },
+      yAxis: { type: 'value', scale: true, ...AX },
+      series: [
+        { name: '金油比(归一)', type: 'line', showSymbol: false, color: t.gold, itemStyle: { color: t.gold }, data: go.map(r => r[1]),
+          lineStyle: { color: t.gold, width: 1.5 } },
+        { name: '标普500(归一)', type: 'line', showSymbol: false, color: t.sub, itemStyle: { color: t.sub },
+          data: alignTo(gDates, S.spx_idx), lineStyle: { color: t.ink2, width: 1.3, type: 'dashed' } },
+      ],
+    });
+  }
+
+  // ④ CPI 同比 vs 10Y 名义（月度）
+  const cpi = S.cpi_yoy || [];
+  const months = cpi.map(r => r[0]);
+  const nomByMonth = {};
+  (S.nom10 || []).forEach(([d, v]) => {
+    const m = d.slice(0, 7);
+    (nomByMonth[m] = nomByMonth[m] || []).push(v);
+  });
+  const nomMonthly = months.map(m => {
+    const arr = nomByMonth[m];
+    return arr && arr.length ? +(arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(2) : null;
+  });
+  const c4 = makeChart('ch-cpi-10y');
+  if (c4) {
+    c4.setOption({
+      tooltip: { ...TIP, trigger: 'axis' },
+      legend: { ...LEG, data: ['CPI 同比(%)', '10Y 名义(%)'] },
+      grid: { left: 48, right: 20, top: 34, bottom: 26 },
+      xAxis: { type: 'category', data: months, ...AX },
+      yAxis: { type: 'value', name: '%', scale: true, ...AX },
+      series: [
+        { name: 'CPI 同比(%)', type: 'line', showSymbol: false, color: t.up, itemStyle: { color: t.up }, data: cpi.map(r => r[1]),
+          lineStyle: { color: t.up, width: 1.5 } },
+        { name: '10Y 名义(%)', type: 'line', showSymbol: false, color: t.accent, itemStyle: { color: t.accent }, data: nomMonthly,
+          lineStyle: { color: t.accent, width: 1.4 } },
+      ],
+    });
+  }
+}
+
 function renderBreadthValuation(DATA, t) {
   const B = DATA.breadth, V = DATA.valuation, E = DATA.events;
   if (!B && !V && !E) {
@@ -552,6 +664,8 @@ function renderAll(DATA) {
   /* ⑥ 真实广度 · 估值 · 事件 */
   renderBreadthValuation(DATA, t);
   renderStockVal();
+  /* ⑨ 通胀与实际利率 */
+  renderInflation(DATA.inflation, t);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
