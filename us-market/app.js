@@ -336,10 +336,20 @@ function renderShock(S) {
     const c = ratio >= 0.6 ? 'up' : ratio >= 0.4 ? 'flat' : 'down';
     return `<span class="shk-chip"><b class="${c}">${groupName[k]} ${s}/${t}</b></span>`;
   };
-  const rows = S.items.map(it => `<tr>
+  const rank = { triggered: 0, near: 1, ok: 2 };
+  const items = [...S.items].sort((a, b) =>
+    (rank[a.status] - rank[b.status]) ||
+    (Object.keys(groupName).indexOf(a.group) - Object.keys(groupName).indexOf(b.group)));
+  const mark = it => {
+    if (!it.prev_status || it.prev_status === it.status) return '';
+    if (it.status === 'triggered') return '<span class="shk-tag new">新增</span>';
+    if (it.prev_status === 'triggered') return '<span class="shk-tag clr">解除</span>';
+    return '';
+  };
+  const rows = items.map(it => `<tr>
       <td>${dot(it.status)}</td>
       <td>${groupName[it.group]}</td>
-      <td>${it.name}</td>
+      <td>${it.name}${mark(it)}</td>
       <td class="num">${it.value}</td>
       <td style="color:var(--ink3)">${it.threshold}</td>
     </tr>`).join('');
@@ -350,7 +360,18 @@ function renderShock(S) {
     </div>
     <div class="shk-chips">${chip('recession')}${chip('panic')}${chip('structural')}
       <span style="color:var(--ink3);font-size:11px;margin-left:6px">● 触发 · ◐ 接近 · ○ 未触发</span></div>
-    <table class="matrix shk-table">
+    ${(() => {
+      const d = S.delta;
+      if (!d) return '';
+      const nt = d.newly_triggered || [], cl = d.cleared || [];
+      const parts = [];
+      if (nt.length) parts.push(`<b class="up">新增触发：${nt.join('、')}</b>`);
+      if (cl.length) parts.push(`<b class="down">解除：${cl.join('、')}</b>`);
+      const base = d.base_date ? `对比 ${d.base_date}：` : '对比上一交易日：';
+      if (!parts.length) return `<div class="shk-delta">${base}无新增触发、无解除</div>`;
+      return `<div class="shk-delta">${base}${parts.join(' · ')}</div>`;
+    })()}
+    <table class="matrix shk-table"><colgroup><col style="width:26px"><col style="width:112px"><col><col style="width:150px"><col style="width:180px"></colgroup>
       <tr><th></th><th>模板</th><th>信号</th><th>当前</th><th>阈值</th></tr>${rows}</table>
     <div class="mini" style="color:var(--ink3);font-size:11px;margin-top:4px">${S.note || ''}</div>`;
 }
