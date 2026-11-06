@@ -1192,3 +1192,9 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
   .strategy-rules-grid { grid-template-columns: 1fr; }
   .monthly-table { font-size: 11px; }
 }
+
+/* 大资金趋势变化（2026-11-06）：四列行 —— 品种 / 5日 / 10日20日 / 家人 */
+.bigmoney-block .sector-item { grid-template-columns: minmax(0, 1fr) 118px 108px 74px; }
+.bigmoney-block .sector-item-name em { display: block; font-style: normal; font-size: 11px; color: var(--muted); }
+.bigmoney-block .bigmoney-long { font-variant-numeric: tabular-nums; font-weight: 500; }
+.bigmoney-block .sector-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); }

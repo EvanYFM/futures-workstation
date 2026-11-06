@@ -189,35 +189,35 @@ function renderTide() {
   }).join("");
 }
 
-/* 四 净持仓分布变化：全商品按当日席位合成方向金额排序取前五（防御性剔除股指/国债） */
-function renderNetFlowChanges() {
-  const items = currentSnapshot().instruments
-    .filter((item) => {
-      const flow = numeric(item.marketFlow?.capitalFlow);
-      const sector = String(item.sector || "");
-      return item.marketFlow && flow !== 0 && !sector.includes("股指") && !sector.includes("国债");
-    })
-    .sort((a, b) => numeric(b.marketFlow.capitalFlow) - numeric(a.marketFlow.capitalFlow));
-  const fresh = items.filter((item) => item.marketFlow.fresh !== false);
-  const pool = fresh.length >= 10 ? fresh : items;
-  if (!pool.length) {
-    $("#netFlowGrid").innerHTML = `<div class="detail-empty">该日期缺少资金净流动数据（marketFlow 未覆盖）。</div>`;
+/* 四 大资金趋势变化：内资+外资 5/10/20 日同向净流入/流出，家人是否反向
+   （2026-11-06 用户定。原「净持仓分布变化」依赖 marketFlow.capitalFlow，
+    该字段 0/58 非空，板块长期空白，故整块替换。） */
+function renderBigMoneyTrend() {
+  const data = currentSnapshot().bigMoneyTrend || {};
+  const inflow = data.inflow || [];
+  const outflow = data.outflow || [];
+  if (!inflow.length && !outflow.length) {
+    $("#netFlowGrid").innerHTML = `<div class="detail-empty">该日期没有满足「同向占比≥0.6 且 |5日净额|≥0.3 亿」的品种。</div>`;
     return;
   }
-  const topLong = pool.slice(0, 5);
-  const topShort = pool.slice(-5).reverse();
-  const side = (list, title, cls) => `<div class="sector-side"><div class="side-title ${cls}">${title}</div>${list.map((item) => `
-    <button class="sector-item" data-open-symbol="${escapeHtml(item.symbol)}" aria-label="查看${escapeHtml(item.variety)}详情">
-      <span class="sector-item-name">${escapeHtml(item.variety)} <small>${escapeHtml(item.symbol)}</small></span>
-      <span class="${signClass(item.marketFlow.capitalFlow)}"><small>资金</small><strong>${(numeric(item.marketFlow.capitalFlow) / 1e8).toLocaleString("zh-CN", {maximumFractionDigits: 2})} 亿</strong></span>
-      <span class="${signClass(item.quote?.changePct)}"><small>涨跌</small><strong>${formatSigned(item.quote?.changePct, 2)}%</strong></span>
-    </button>`).join("")}</div>`;
-  $("#netFlowGrid").innerHTML = `<article class="sector-block netflow-block">
-    <div class="sector-title"><strong>当日资金净流动</strong><span class="sector-count">口径：${escapeHtml(pool[0].marketFlow.source || "同花顺/AKShare 资金流")}</span></div>
+  const amount = (value) => value == null
+    ? `<strong class="neutral-text">—</strong>`
+    : `<strong class="${signClass(value)}">${formatSigned(value, 2)} 亿</strong>`;
+  const ratio = (value) => value == null ? "—" : value.toFixed(2);
+  const row = (entry) => `<button class="sector-item" data-open-symbol="${escapeHtml(entry.symbol)}" aria-label="查看${escapeHtml(entry.variety)}详情">
+      <span class="sector-item-name">${escapeHtml(entry.variety)} <small>${escapeHtml(entry.symbol)}</small><em>${escapeHtml(entry.sector || "")}</em></span>
+      <span class="${signClass(entry.net5)}"><small>5日 · 同向 ${ratio(entry.consistency5)}</small>${amount(entry.net5)}</span>
+      <span><small>10日 / 20日</small><strong class="bigmoney-long">${entry.net10 == null ? "—" : formatSigned(entry.net10, 2)} / ${entry.net20 == null ? "—" : formatSigned(entry.net20, 2)}</strong></span>
+      <span class="${entry.family === "反向" ? "bear-text" : "neutral-text"}"><small>家人席位</small><strong>${escapeHtml(entry.family || "—")}</strong></span>
+    </button>`;
+  const side = (list, title, cls) => `<div class="sector-side"><div class="side-title ${cls}">${title}</div>${list.map(row).join("") || `<p class="empty-side">无符合条件的品种</p>`}</div>`;
+  $("#netFlowGrid").innerHTML = `<article class="sector-block netflow-block bigmoney-block">
+    <div class="sector-title"><strong>内资 + 外资 资金趋势</strong><span class="sector-count">${escapeHtml(data.note || "")} · 数据日 ${escapeHtml(data.asOf || "")}</span></div>
     <div class="sector-sides">
-      ${side(topLong, "合成偏多前五", "bull-text")}
-      ${side(topShort, "合成偏空前五", "bear-text")}
+      ${side(inflow, "连续净流入 Top5", "bull-text")}
+      ${side(outflow, "连续净流出 Top5", "bear-text")}
     </div>
+    <p class="sector-note">同向占比 = |N日净额| ÷ N日绝对额之和，1 表示每日同向、0 表示来回抵消。日度资金符号本就频繁翻转，严格「连续 5 日同号」在真实数据中筛不出品种，故以同向占比衡量持续性。家人席位只判方向是否与大资金相反，不比较金额。</p>
   </article>`;
 }
 
@@ -1637,7 +1637,7 @@ function renderAll() {
   renderFocus();
   renderTide();
   renderCorePanorama();
-  renderNetFlowChanges();
+  renderBigMoneyTrend();
   renderSeatFlow();
   renderBrokerHighlights();
   renderOverviewStatus();
