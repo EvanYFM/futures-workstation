@@ -322,6 +322,39 @@ function renderStockVal() {
     `<tr><td colspan="5" style="color:var(--ink3);text-align:left">${STOCK_VAL.source} · 截至 ${STOCK_VAL.as_of} · ${STOCK_VAL.note}</td></tr>`;
 }
 
+/* ══════════ ⑩ 冲击诊断 ══════════ */
+function renderShock(S) {
+  const el = $('shock-block');
+  if (!el) return;
+  if (!S || !S.items) { el.innerHTML = ''; return; }
+  const groupName = { recession: '衰退交易', panic: '恐慌/流动性', structural: '结构性去AI' };
+  const statusMark = { triggered: '●', near: '◐', ok: '○' };
+  const dot = st => `<span class="shk ${st}">${statusMark[st]}</span>`;
+  const sc = S.scores || {}, tt = S.totals || {};
+  const chip = (k) => {
+    const s = sc[k] || 0, t = tt[k] || 1, ratio = s / t;
+    const c = ratio >= 0.6 ? 'up' : ratio >= 0.4 ? 'flat' : 'down';
+    return `<span class="shk-chip"><b class="${c}">${groupName[k]} ${s}/${t}</b></span>`;
+  };
+  const rows = S.items.map(it => `<tr>
+      <td>${dot(it.status)}</td>
+      <td>${groupName[it.group]}</td>
+      <td>${it.name}</td>
+      <td class="num">${it.value}</td>
+      <td style="color:var(--ink3)">${it.threshold}</td>
+    </tr>`).join('');
+  el.innerHTML = `
+    <div class="shk-head">
+      <span class="shk-verdict">${S.verdict?.label || '—'}</span>
+      <span style="color:var(--ink3);font-size:11.5px">${S.verdict?.desc || ''}${S.breadth_shape ? `（当日广度形态：${S.breadth_shape}）` : ''}</span>
+    </div>
+    <div class="shk-chips">${chip('recession')}${chip('panic')}${chip('structural')}
+      <span style="color:var(--ink3);font-size:11px;margin-left:6px">● 触发 · ◐ 接近 · ○ 未触发</span></div>
+    <table class="matrix shk-table">
+      <tr><th></th><th>模板</th><th>信号</th><th>当前</th><th>阈值</th></tr>${rows}</table>
+    <div class="mini" style="color:var(--ink3);font-size:11px;margin-top:4px">${S.note || ''}</div>`;
+}
+
 /* ══════════ ⑨ 通胀与实际利率 ══════════ */
 function alignTo(dates, rows) {
   const m = new Map((rows || []).map(r => [r[0], r[1]]));
@@ -666,6 +699,8 @@ function renderAll(DATA) {
   renderStockVal();
   /* ⑨ 通胀与实际利率 */
   renderInflation(DATA.inflation, t);
+  /* ⑩ 冲击诊断 */
+  renderShock(DATA.shock);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
