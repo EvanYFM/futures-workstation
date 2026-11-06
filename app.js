@@ -32,6 +32,7 @@ const state = {
   ctaDirection: "all",
   activeCtaSymbol: null,
   focusTechnicalSymbol: null,
+  bmWindow: "5",
   /* 策略规则卡 v2：A 区间回归 / B 突破（strategies.json 云端同步） */
   strategies: [],
   monthlyReviewMonth: "all",
@@ -137,10 +138,15 @@ function renderSummary() {
   const summary = snapshot.summary;
   const bull = summary.strongestBullish;
   const bear = summary.strongestBearish;
+  const ctaRows = snapshot.cta || [];
+  const ctaStrongBull = ctaRows.filter((row) => row.signal === "强多").length;
+  const ctaStrongBear = ctaRows.filter((row) => row.signal === "强空").length;
   $("#summaryStrip").innerHTML = [
     summaryCard("三方净方向", `${summary.bullishCount} 多 / ${summary.bearishCount} 空`, `商品样本 ${summary.instrumentCount} 个，按保证金金额判断`),
-    summaryCard("强共振品种", summary.tripleCount, "内外资同向且家人反向后确认", summary.tripleCount ? "bull-text" : "neutral-text"),
-    summaryCard("内外资同向", summary.domesticForeignSameCount || 0, `家人反向确认 ${summary.familyReverseCount || 0} 个`),
+    /* CTA 强档提到主位：5 日远期收益回测里只有它具备明显超额，
+       家人反向的超额约 +0.01%，仅作参考（详见页面底部口径说明）。 */
+    summaryCard("CTA 强档", `${ctaStrongBull} 强多 / ${ctaStrongBear} 强空`, "5日回测：强多 +0.80%、强空 −0.70%（胜率 55.3% / 39.7%）", ctaStrongBull > ctaStrongBear ? "bull-text" : ctaStrongBear > ctaStrongBull ? "bear-text" : "neutral-text"),
+    summaryCard("内外资同向", summary.domesticForeignSameCount || 0, `家人反向 ${summary.familyReverseCount || 0} 个（仅参考，无超额）`),
     summaryCard("最强净多", bull ? `${bull.variety} ${bull.symbol}` : "暂无", bull ? formatAmount(bull.amountSignal) : "今日无净多品种", "bull-text"),
     summaryCard("最强净空", bear ? `${bear.variety} ${bear.symbol}` : "暂无", bear ? formatAmount(bear.amountSignal) : "今日无净空品种", "bear-text"),
     summaryCard("保证金覆盖", `${(summary.marginCoverage * 100).toFixed(0)}%`, `${summary.marginSourceUpdate || "来源时间未披露"} · ${summary.marginCacheNote || "状态未知"}`),
@@ -189,35 +195,45 @@ function renderTide() {
   }).join("");
 }
 
-/* 四 大资金趋势变化：内资+外资 5/10/20 日同向净流入/流出，家人是否反向
+/* 四 大资金趋势变化：内资+外资 5/10/20 日资金趋势 + 家人席位参考标注
    （2026-11-06 用户定。原「净持仓分布变化」依赖 marketFlow.capitalFlow，
-    该字段 0/58 非空，板块长期空白，故整块替换。） */
+    该字段 0/58 非空，板块长期空白，故整块替换。）
+   三个窗口榜单不同（5日 CU/RU/V/BR/JM vs 20日 CU/RU/LC/M/SM），
+   合并成一张表会漏掉只在长窗口上榜的品种，故分窗口切换展示。 */
 function renderBigMoneyTrend() {
   const data = currentSnapshot().bigMoneyTrend || {};
-  const inflow = data.inflow || [];
-  const outflow = data.outflow || [];
-  if (!inflow.length && !outflow.length) {
-    $("#netFlowGrid").innerHTML = `<div class="detail-empty">该日期没有满足「同向占比≥0.6 且 |5日净额|≥0.3 亿」的品种。</div>`;
+  const windows = data.windows || {};
+  const available = Object.keys(windows).sort((a, b) => Number(a) - Number(b));
+  if (!available.length) {
+    $("#netFlowGrid").innerHTML = `<div class="detail-empty">该快照没有大资金趋势数据。</div>`;
     return;
   }
-  const amount = (value) => value == null
+  const active = available.includes(state.bmWindow) ? state.bmWindow : available[0];
+  const group = windows[active] || { inflow: [], outflow: [] };
+  const others = available.filter((key) => key !== active);
+
+  const cell = (value) => value == null
     ? `<strong class="neutral-text">—</strong>`
     : `<strong class="${signClass(value)}">${formatSigned(value, 2)} 亿</strong>`;
-  const ratio = (value) => value == null ? "—" : value.toFixed(2);
   const row = (entry) => `<button class="sector-item" data-open-symbol="${escapeHtml(entry.symbol)}" aria-label="查看${escapeHtml(entry.variety)}详情">
       <span class="sector-item-name">${escapeHtml(entry.variety)} <small>${escapeHtml(entry.symbol)}</small><em>${escapeHtml(entry.sector || "")}</em></span>
-      <span class="${signClass(entry.net5)}"><small>5日 · 同向 ${ratio(entry.consistency5)}</small>${amount(entry.net5)}</span>
-      <span><small>10日 / 20日</small><strong class="bigmoney-long">${entry.net10 == null ? "—" : formatSigned(entry.net10, 2)} / ${entry.net20 == null ? "—" : formatSigned(entry.net20, 2)}</strong></span>
-      <span class="${entry.family === "反向" ? "bear-text" : "neutral-text"}"><small>家人席位</small><strong>${escapeHtml(entry.family || "—")}</strong></span>
+      <span class="${signClass(entry["net" + active])}"><small>${active}日 · 同向 ${entry["consistency" + active] == null ? "—" : entry["consistency" + active].toFixed(2)}</small>${cell(entry["net" + active])}</span>
+      <span><small>${others.map((key) => key + "日").join(" / ")}</small><strong class="bigmoney-long">${others.map((key) => entry["net" + key] == null ? "—" : formatSigned(entry["net" + key], 1)).join(" / ")}</strong></span>
+      <span class="${entry.family === "反向" ? "bear-text" : "neutral-text"}"><small>家人参考</small><strong>${escapeHtml(entry.family || "—")}</strong></span>
     </button>`;
-  const side = (list, title, cls) => `<div class="sector-side"><div class="side-title ${cls}">${title}</div>${list.map(row).join("") || `<p class="empty-side">无符合条件的品种</p>`}</div>`;
+  const side = (list, title, cls) => `<div class="sector-side"><div class="side-title ${cls}">${title}</div>${list.map(row).join("") || `<p class="empty-side">该窗口无符合条件的品种</p>`}</div>`;
+
   $("#netFlowGrid").innerHTML = `<article class="sector-block netflow-block bigmoney-block">
-    <div class="sector-title"><strong>内资 + 外资 资金趋势</strong><span class="sector-count">${escapeHtml(data.note || "")} · 数据日 ${escapeHtml(data.asOf || "")}</span></div>
-    <div class="sector-sides">
-      ${side(inflow, "连续净流入 Top5", "bull-text")}
-      ${side(outflow, "连续净流出 Top5", "bear-text")}
+    <div class="sector-title">
+      <strong>内资 + 外资 资金趋势</strong>
+      <div class="bm-tabs" role="tablist">${available.map((key) => `<button role="tab" data-bm-window="${key}" class="${key === active ? "is-active" : ""}" aria-selected="${key === active}">${key} 日</button>`).join("")}</div>
+      <span class="sector-count">${escapeHtml(data.note || "")} · 数据日 ${escapeHtml(data.asOf || "")}</span>
     </div>
-    <p class="sector-note">同向占比 = |N日净额| ÷ N日绝对额之和，1 表示每日同向、0 表示来回抵消。日度资金符号本就频繁翻转，严格「连续 5 日同号」在真实数据中筛不出品种，故以同向占比衡量持续性。家人席位只判方向是否与大资金相反，不比较金额。</p>
+    <div class="sector-sides">
+      ${side(group.inflow || [], `连续净流入 Top5（${active}日）`, "bull-text")}
+      ${side(group.outflow || [], `连续净流出 Top5（${active}日）`, "bear-text")}
+    </div>
+    <p class="sector-note">同向占比 = |N日净额| ÷ N日绝对额之和，1 表示每日同向、0 表示来回抵消。日度资金符号本就频繁翻转，严格「连续 5 日同号」在真实数据中筛不出品种，故以同向占比衡量持续性。三个窗口榜单不同，切换查看以兔遗漏。家人席位仅作参考：5 日远期收益回测显示其超额约 +0.01%、胜率 50.1%（2505 个样本），不具备预测力，只判方向是否与大资金相反、不比较金额。</p>
   </article>`;
 }
 
@@ -261,18 +277,23 @@ function coreItems() {
 }
 
 function renderCorePanorama() {
+  const ctaIndex = Object.fromEntries((currentSnapshot().cta || []).map((row) => [row.symbol, row]));
   const groups = coreItems();
   if (!groups.length) {
     $("#corePanorama").innerHTML = `<div class="detail-empty">该快照没有可用重点品种。</div>`;
     return;
   }
-  $("#corePanorama").innerHTML = `<div class="panorama-head panorama-head-v5"><span>板块</span><span>品种 / 行情</span><span class="num">5日</span><span class="num">10日</span><span class="num">30日</span><span>三方净变动</span><span>内资 / 外资 / 家人反向</span><span>趋势与信号</span></div>${groups.map((group) => `<section class="panorama-group"><header>${escapeHtml(group.sector)}</header><div class="panorama-group-rows">${group.items.map((item) => {
+  $("#corePanorama").innerHTML = `<div class="panorama-head panorama-head-v5"><span>板块</span><span>品种 / 行情</span><span class="num">5日</span><span class="num">10日</span><span class="num">30日</span><span>三方净变动</span><span>内资 / 外资 / 家人（参考）</span><span>趋势与信号</span></div>${groups.map((group) => `<section class="panorama-group"><header>${escapeHtml(group.sector)}</header><div class="panorama-group-rows">${group.items.map((item) => {
     const quote = item.quote;
     const mf = item.marketFlow || {};
     const r5 = computeReturn5d(item.symbol);
     const r10 = mf.return10d;
     const r30 = mf.return30d;
     const state = trendStateByReturn(r5);
+    const ctaRow = ctaIndex[item.symbol];
+    const ctaSignal = ctaRow?.signal || "";
+    const ctaClass = ctaSignal === "强多" ? "is-bull-strong" : ctaSignal === "偏多" ? "is-bull"
+      : ctaSignal === "强空" ? "is-bear-strong" : ctaSignal === "偏空" ? "is-bear" : "is-flat";
     const rCell = (v) => v == null ? `<span class="num gray">—</span>` : `<span class="num ${v > 0 ? "bull-text" : v < 0 ? "bear-text" : "neutral-text"}">${formatSigned(v, 2)}%</span>`;
     return `<button class="panorama-row panorama-row-v5" data-open-symbol="${escapeHtml(item.symbol)}">
       <span class="panorama-name"><strong>${escapeHtml(item.variety)} ${escapeHtml(item.symbol)}</strong><small>${escapeHtml(item.sector)} · ${escapeHtml(quote?.contract || item.margin.contract || "主力待披露")}</small>${mf.returnsRollover ? `<small class="rollover-note" title="${escapeHtml(mf.returnsRollover)}">收益含换月，已置空</small>` : ""}${quote ? `<em>${numeric(quote.close).toLocaleString("zh-CN", {maximumFractionDigits:4})} <b class="${signClass(quote.changePct)}">${formatSigned(quote.changePct, 2)}%</b></em>` : `<em>行情暂无</em>`}</span>
@@ -281,7 +302,7 @@ function renderCorePanorama() {
       <span>${rCell(r30)}</span>
       <span class="panorama-signal"><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong><small class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</small></span>
       <span>${groupBars(item)}</span>
-      <span class="panorama-tags"><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
+      <span class="panorama-tags"><span class="tag tag-cta ${ctaClass}">${escapeHtml(ctaSignal || "无 CTA")}</span><span class="tag tag-ref">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
     </button>`;
   }).join("")}</div></section>`).join("")}`;
 }
@@ -301,7 +322,7 @@ function renderBrokerHighlights() {
   const names = ["内资", "外资", "家人"];
   $("#brokerHighlights").innerHTML = names.map((name) => {
     const data = groups[name] || {bullish: [], bearish: []};
-    const label = name === "家人" ? "家人反向" : name;
+    const label = name === "家人" ? "家人（参考，已取反）" : name;
     return `<article class="broker-highlight"><header><strong>${label}</strong><small>${name === "家人" ? "原始方向已取反" : "正向资金"}</small></header><div class="broker-highlight-sides"><section><h3 class="bull-text">净多贡献</h3>${brokerSide(data.bullish, "bullish")}</section><section><h3 class="bear-text">净空贡献</h3>${brokerSide(data.bearish, "bearish")}</section></div></article>`;
   }).join("");
 }
@@ -637,7 +658,7 @@ function renderDetailWorkspace() {
     <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
     <section id="detail-overview" class="detail-dashboard-grid">
       <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & SEAT DIRECTION</small><h3>价格与席位合成方向</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>席位合成净变化</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
-      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>模型计算</dt><dd>席位合成方向 ${formatAmount(item.amountSignal)}。这是按席位分组与保证金换算得到的自建指标，不等于真实资金净流入。</dd></div><div><dt>数据口径</dt><dd>${escapeHtml(contract.text || "合约缺失")}${contract.conflicts.length ? `；<b class="bear-text">${contract.conflicts.join("、")}合约与行情不同月</b>，价格与技术位不可直接比较` : "；三处合约一致"}</dd></div><div><dt>策略判断</dt><dd>${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
+      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>模型计算</dt><dd>席位合成方向 ${formatAmount(item.amountSignal)}。这是按席位分组与保证金换算得到的自建指标，不等于真实资金净流入。</dd></div><div><dt>数据口径</dt><dd>${escapeHtml(contract.text || "合约缺失")}${contract.conflicts.length ? `；<b class="bear-text">${contract.conflicts.join("、")}合约与行情不同月</b>，价格与技术位不可直接比较` : "；三处合约一致"}</dd></div><div><dt>策略判断</dt><dd>${ctaRow ? `CTA ${escapeHtml(ctaRow.signal)}（${formatSigned(ctaRow.score)}，覆盖 ${ctaRow.coverage}%）` : "CTA 未覆盖"}；${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”（参考）。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
     </section>
     <section id="detail-positioning" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>POSITIONING</small><h3>资金与席位结构</h3></div><p>存量净持仓与今日边际分列；家人按原始方向展示</p></div><div class="position-matrix"><div class="position-matrix-head"><span>资金群体</span><span>存量净持仓</span><span>今日手数净变动</span><span>今日净金额</span><span>边际动作</span></div>${groupRows.map(([label, group]) => `<div class="position-matrix-row"><b>${label}</b>${positionVisual(group.netPosition, stockScale)}<strong class="${signClass(group.hands)}">${formatHands(group.hands)}</strong><strong class="${signClass(group.amount)}">${formatAmount(group.amount)}</strong><span class="${signClass(numeric(group.longChange) - numeric(group.shortChange))}">${escapeHtml(flowAction(group))}</span></div>`).join("")}</div><div class="seat-rank-grid detail-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${item.brokerRanking.netLong.length}/5 <span>${rankingDominance(item.brokerRanking.netLong)}</span></div>${rankRows(item.brokerRanking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${item.brokerRanking.netShort.length}/5 <span>${rankingDominance(item.brokerRanking.netShort)}</span></div>${rankRows(item.brokerRanking.netShort, "bear-text", "暂无净空席位")}</div></div></section>
     <section id="detail-technical" class="detail-surface detail-wide-section technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
@@ -1711,6 +1732,8 @@ function bindEvents() {
     if (dateButton) setDate(dateButton.dataset.date);
     const row = event.target.closest("[data-symbol]");
     if (row) { state.activeSymbol = row.dataset.symbol; renderInstrumentTable(); }
+    const bmTab = event.target.closest("[data-bm-window]");
+    if (bmTab) { state.bmWindow = bmTab.dataset.bmWindow; renderBigMoneyTrend(); return; }
     const ctaRow = event.target.closest("[data-cta-symbol]");
     if (ctaRow) { state.activeCtaSymbol = ctaRow.dataset.ctaSymbol; state.focusTechnicalSymbol = window.FocusTechnical?.ALLOWED_SYMBOLS?.has(state.activeCtaSymbol) ? state.activeCtaSymbol : null; renderCta(); }
     const ctaFocus = event.target.closest("[data-cta-focus-symbol]");
