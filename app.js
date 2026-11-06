@@ -620,6 +620,9 @@ function renderDetailWorkspace() {
   }
   state.activeSymbol = item.symbol;
   const series = seriesFor(item.symbol);
+  /* CTA 行必须在本函数内单独查，不能复用 renderCorePanorama 里的同名变量
+     （2026-11-06 事故：详情页引用了隔壁函数的 ctaRow，整页 ReferenceError） */
+  const ctaRow = (currentSnapshot().cta || []).find((row) => row.symbol === item.symbol) || null;
   const quote = item.quote;
   const marketFlow = item.marketFlow;
   const technical = item.technical?.status === "OK" ? item.technical : null;
