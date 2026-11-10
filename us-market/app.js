@@ -62,8 +62,9 @@ function sparkline(arr, w = 120, h = 30) {
 }
 
 /* ── 风险偏好状态 → 徽标 ── */
-function stateChip(d) {  // d>0 偏进攻(红/涨)，d<0 偏防守(绿/跌)，与全站红涨绿跌一致
+function stateChip(d, invert = false) {  // d>0 偏进攻(红/涨)，d<0 偏防守(绿/跌)；invert 用于反向指标（USD/CNY）
   if (d == null) return '<span class="state-chip mid">—</span>';
+  if (invert) d = -d;
   if (d >= 0.3) return '<span class="state-chip on">risk-on</span>';
   if (d <= -0.3) return '<span class="state-chip off">risk-off</span>';
   return '<span class="state-chip mid">neutral</span>';
@@ -140,11 +141,11 @@ function renderLiquidity(L, t, structure) {
       <div class="mini">${r.meaning}</div>
     </div>`).join('');
 
-  /* 跨资产确认：铜金比 / USD/JPY */
+  /* 跨资产确认：铜金比 / USD/JPY / USDCNY */
   $('xasset-cards').innerHTML = (L.cross_asset || []).map(c => `
     <div class="card">
-      <div class="k"><span>${c.name}</span>${stateChip(c.d20)}</div>
-      <div class="v num ${cls(c.d5)}">${fmt(c.value)}</div>
+      <div class="k"><span>${c.name}</span>${stateChip(c.d20, !!c.invert)}</div>
+      <div class="v num ${cls(c.d5)}">${fmt(c.value, c.dp ?? 2)}</div>
       <div class="s num">5日 ${sgn(c.d5)}${fmt(c.d5)}% · 20日 ${sgn(c.d20)}${fmt(c.d20)}%</div>
       ${sparkline(c.spark)}
       <div class="mini">${c.meaning}</div>
