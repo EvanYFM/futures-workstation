@@ -1,10 +1,11 @@
 {
   "schemaVersion": 1,
-  "runId": "20261111-20261111T183254+0800",
-  "generatedAt": "2026-11-11T18:32:54+08:00",
-  "latestDate": "20261111",
-  "snapshotCount": 94,
+  "runId": "20261112-20261112T230734+0800",
+  "generatedAt": "2026-11-12T23:07:34+08:00",
+  "latestDate": "20261112",
+  "snapshotCount": 95,
   "snapshotDates": [
+    "20261112",
     "20261111",
     "20261110",
     "20261109",
@@ -101,10 +102,10 @@
     "20260625"
   ],
   "sourceFiles": {
-    "quoteSourceFile": "fiona_main_quotes_20261111.csv",
-    "thsSourceFile": "ths_main_quotes_20261111.csv",
-    "basisSourceFile": "futures_basis_history_20261111.csv",
-    "warehouseSourceFile": "eastmoney_warehouse_receipts_20261111.csv",
+    "quoteSourceFile": "fiona_main_quotes_20261112.csv",
+    "thsSourceFile": "ths_main_quotes_20261112.csv",
+    "basisSourceFile": "futures_basis_history_20261112.csv",
+    "warehouseSourceFile": "eastmoney_warehouse_receipts_20261112.csv",
     "mysteelFundamentalSourceFile": ""
   },
   "outputs": [
