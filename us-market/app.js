@@ -581,6 +581,116 @@ function renderBreadthValuation(DATA, t) {
   }
 }
 
+/* ══════════ ⑥b ETF 结构比值 ══════════ */
+function renderEtfRatios(E, t) {
+  const el = $('etf-ratio-table');
+  if (!el) return;
+  if (!E || !E.rows?.length) {
+    el.innerHTML = '<tr><td style="color:var(--ink3)">该快照不含 ETF 比值（20261118 起启用）</td></tr>';
+    const n0 = $('etf-ratio-note'); if (n0) n0.textContent = '';
+    return;
+  }
+  const zCls = z => z == null ? '' : (z >= 1.5 ? 'up' : z <= -1.5 ? 'down' : '');
+  el.innerHTML =
+    '<colgroup><col style="width:158px"><col style="width:80px"><col style="width:74px">' +
+    '<col style="width:74px"><col style="width:60px"><col></colgroup>' +
+    '<tr><th>比值</th><th>读数</th><th>5 日</th><th>20 日</th><th>z60</th><th>含义</th></tr>' +
+    E.rows.map(r => `<tr>
+      <td style="text-align:left"><b>${r.name}</b><br><span style="color:var(--ink3);font-size:11px">${r.num} / ${r.den}</span></td>
+      <td class="num">${fmt(r.last, 4)}</td>
+      <td class="num ${cls(r.d5)}">${sgn(r.d5)}${fmt(r.d5)}%</td>
+      <td class="num ${cls(r.d20)}">${sgn(r.d20)}${fmt(r.d20)}%</td>
+      <td class="num ${zCls(r.z60)}">${r.z60 == null ? '—' : (r.z60 > 0 ? '+' : '') + r.z60.toFixed(2)}</td>
+      <td style="text-align:left;color:var(--ink2)">${r.meaning}${r.last == null ? ' · 样本不足' : ''}</td></tr>`).join('');
+  const note = $('etf-ratio-note');
+  if (note) note.textContent = `${E.as_of || ''} · ${E.note || ''}`;
+}
+
+/* ══════════ ⑩ 原油与成品油 ══════════ */
+function renderOil(O, t) {
+  const desc = $('oil-desc');
+  if (desc && !renderOil._desc) renderOil._desc = desc.innerHTML;
+  const hide = ['oil-cards', 'ch-crack', 'oil-inv-table', 'oil-regime', 'oil-gaps'];
+  /* 切回旧快照时隐藏、再切回新快照时要恢复显示，否则一旦隐藏就永久消失 */
+  hide.forEach(id => { const el = $(id); if (el) el.style.display = ''; });
+  if (!O) {
+    if (desc) desc.innerHTML = '该快照不含原油模块（20261118 起启用）。';
+    hide.forEach(id => { const el = $(id); if (el) el.style.display = 'none'; });
+    return;
+  }
+  if (desc && renderOil._desc) desc.innerHTML = renderOil._desc;
+  const p = O.price || {}, c = O.crack || {}, g = c.gasoline || {}, d = c.distillate || {};
+  const q = v => v == null ? '—' : v.toFixed(0) + '% 分位';
+  $('oil-cards').innerHTML = `
+    <div class="card"><div class="k"><span>WTI 原油</span><span class="${cls(p.wti_d1)} num">${sgn(p.wti_d1)}${fmt(p.wti_d1)}%</span></div>
+      <div class="v num">$${fmt(p.wti)}</div>
+      <div class="s num">5日 ${sgn(p.wti_d5)}${fmt(p.wti_d5)}% · 20日 ${sgn(p.wti_d20)}${fmt(p.wti_d20)}%</div>
+      ${sparkline(p.wti_spark)}</div>
+    <div class="card"><div class="k"><span>Brent − WTI</span><span class="${cls(p.brent_wti_d20)} num">${sgn(p.brent_wti_d20)}${fmt(p.brent_wti_d20)}%</span></div>
+      <div class="v num">$${fmt(p.brent_wti)}</div>
+      <div class="s">跨区价差 · 20 日变化（价差本身 %）· Brent $${fmt(p.brent)}</div>
+      ${sparkline(p.brent_wti_spark)}</div>
+    <div class="card"><div class="k"><span>汽油裂解</span><span class="${cls(g.d20)} num">${sgn(g.d20)}${fmt(g.d20)}%</span></div>
+      <div class="v num">$${fmt(g.value)}</div>
+      <div class="s">美元/桶 · 5 年 ${q(g.pct5y)} · 5日 ${sgn(g.d5)}${fmt(g.d5)}%</div>
+      ${sparkline(g.spark)}</div>
+    <div class="card"><div class="k"><span>馏分油裂解</span><span class="${cls(d.d20)} num">${sgn(d.d20)}${fmt(d.d20)}%</span></div>
+      <div class="v num">$${fmt(d.value)}</div>
+      <div class="s">美元/桶 · 5 年 ${q(d.pct5y)} · 5日 ${sgn(d.d5)}${fmt(d.d5)}%</div>
+      ${sparkline(d.spark)}</div>`;
+
+  const cc = makeChart('ch-crack');
+  if (cc) {
+    const n = Math.max((g.spark || []).length, (d.spark || []).length);
+    const labels = Array.from({ length: n }, (_, i) => i === n - 1 ? '最新' : `T-${n - 1 - i}`);
+    cc.setOption({
+      tooltip: { ...TIP, trigger: 'axis', valueFormatter: v => v == null ? '—' : '$' + Number(v).toFixed(2) },
+      legend: { data: ['汽油裂解', '馏分油裂解'], textStyle: { color: t.text }, icon: 'roundRect',
+                itemWidth: 12, itemHeight: 8, top: 0 },
+      grid: { left: 56, right: 20, top: 30, bottom: 24 },
+      xAxis: { type: 'category', data: labels, ...AX },
+      yAxis: { type: 'value', scale: true, ...AX, axisLabel: { color: t.sub, fontSize: 11, formatter: v => '$' + v } },
+      series: [
+        { name: '汽油裂解', type: 'line', showSymbol: false, data: g.spark,
+          color: t.gold, itemStyle: { color: t.gold }, lineStyle: { color: t.gold, width: 1.6 } },
+        { name: '馏分油裂解', type: 'line', showSymbol: false, data: d.spark,
+          color: t.ink, itemStyle: { color: t.ink }, lineStyle: { color: t.ink, width: 1.6 } },
+      ]
+    });
+  }
+
+  $('oil-inv-table').innerHTML =
+    '<colgroup><col style="width:200px"><col><col><col><col><col style="width:92px"></colgroup>' +
+    '<tr><th>指标</th><th>最新</th><th>4 周</th><th>同比</th><th>vs 前 5 年</th><th>数据日</th></tr>' +
+    (O.inventories || []).map(x => `<tr>
+      <td style="text-align:left">${x.name} <span style="color:var(--ink3);font-size:11px">${x.unit}</span></td>
+      <td class="num">${x.value == null ? '—' : x.value.toLocaleString('en-US', { maximumFractionDigits: 1 })}</td>
+      <td class="num ${cls(x.m4)}">${sgn(x.m4)}${fmt(x.m4)}%</td>
+      <td class="num ${cls(x.yoy)}">${sgn(x.yoy)}${fmt(x.yoy)}%</td>
+      <td class="num ${cls(x.dev5y)}">${sgn(x.dev5y)}${fmt(x.dev5y)}%</td>
+      <td class="num" style="color:var(--ink3)">${x.date ? x.date.slice(5) : '—'}</td></tr>`).join('');
+
+  const V = O.verdict || {};
+  $('oil-regime').innerHTML =
+    `<div class="shk-verdict">${V.label || '—'}</div>
+     <div class="mini" style="color:var(--ink2);margin:2px 0 10px">${V.desc || ''}</div>` +
+    (O.scenarios || []).map(s => `
+      <div class="oil-sc ${s.score >= 2 ? 'on' : ''}">
+        <div class="oil-sc-h"><b>${s.name}</b><span class="sc">${s.score}/3 条件成立</span></div>
+        <table class="oil-tb">
+          <colgroup><col style="width:150px"><col style="width:110px"><col style="width:170px"><col style="width:64px"></colgroup>
+          <tr><th>观测项</th><th>当前</th><th>成立条件</th><th>状态</th></tr>
+          ${s.items.map(it => `<tr>
+            <td>${it.label}</td>
+            <td class="num">${it.value}</td>
+            <td style="text-align:left;color:var(--ink2)">${it.threshold}</td>
+            <td class="${it.hit ? 'up' : ''}">${it.hit ? '成立' : '未成立'}</td></tr>`).join('')}
+        </table>
+      </div>`).join('');
+
+  $('oil-gaps').innerHTML = `<b>数据缺口</b>：${(O.gaps || []).map(x => '· ' + x).join('；')}。<br><b>口径</b>：${O.note || ''}`;
+}
+
 /* ══════════ 渲染主流程 ══════════ */
 function renderAll(DATA) {
   LAST = DATA;
@@ -716,12 +826,15 @@ function renderAll(DATA) {
   renderLiquidity(DATA.liquidity, t, DATA.structure);
   /* ⑤ 结构判别与观察池 */
   renderStructure(DATA.structure, t);
-  /* ⑥ 真实广度 · 估值 · 事件 */
+  /* ⑥ 真实广度 · ETF 比值 · 估值 · 事件 */
   renderBreadthValuation(DATA, t);
+  renderEtfRatios(DATA.etf_ratios, t);
   renderStockVal();
   /* ⑨ 通胀与实际利率 */
   renderInflation(DATA.inflation, t);
-  /* ⑩ 冲击诊断 */
+  /* ⑩ 原油与成品油结构 */
+  renderOil(DATA.oil, t);
+  /* ⑪ 冲击诊断 */
   renderShock(DATA.shock);
 
   /* ⑤ 收益率曲线 */

@@ -117,6 +117,16 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 .shk-tag{font-size:10px;border-radius:2px;padding:0 4px;margin-left:6px;vertical-align:1px}
 .shk-tag.new{color:var(--up);background:var(--upbg);border:1px solid rgba(212,76,71,.35)}
 .shk-tag.clr{color:var(--down);background:var(--downbg);border:1px solid rgba(15,123,108,.35)}
+.oil-sc{border:1px solid var(--line);border-radius:4px;padding:9px 12px;margin-bottom:8px}
+.oil-sc.on{border-color:rgba(212,76,71,.45);background:rgba(212,76,71,.035)}
+.oil-sc-h{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin-bottom:2px}
+.oil-sc-h b{font-size:13px;font-weight:600}
+.oil-sc-h .sc{font-size:11.5px;color:var(--ink2);white-space:nowrap}
+.oil-sc .matrix{margin-top:2px}
+.oil-tb{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:2px}
+.oil-tb th{font-weight:500;color:var(--ink2);text-align:right;padding:3px 8px;border-bottom:1px solid var(--line);font-size:11.5px;white-space:nowrap}
+.oil-tb th:first-child,.oil-tb td:first-child{text-align:left}
+.oil-tb td{padding:3px 8px;font-size:11.5px;text-align:right;border-bottom:1px solid var(--line)}
 @media(max-width:820px){.grid2{grid-template-columns:1fr}}
 
 /* 热力网格 */
@@ -284,13 +294,17 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
 
 <!-- ═══════════ ⑥ 真实广度 · 估值 · 事件 ═══════════ -->
 <section>
-  <div class="sec-head"><h2>⑥ 真实广度 · 估值 · 事件</h2><span class="tag">Breadth · Valuation · Catalysts</span></div>
-  <div class="sec-desc" id="bv-desc">价格与金融条件之外的三个维度：<b>广度</b>（成分股上涨比例与均线位置，区分「权重拖累」与「广泛下跌」；默认 S&amp;P100 近似口径，可在下方切换为全成分股）、<b>估值</b>（滚动 PE 及其 10 年分位、盈利收益率与实际利率之差）、<b>事件</b>（未来两周 FOMC、拍卖、财报与关键数据及一致预期）。</div>
+  <div class="sec-head"><h2>⑥ 真实广度 · ETF 比值 · 估值 · 事件</h2><span class="tag">Breadth · ETF Ratios · Valuation · Catalysts</span></div>
+  <div class="sec-desc" id="bv-desc">价格与金融条件之外的四个维度：<b>广度</b>（成分股上涨比例与均线位置，区分「权重拖累」与「广泛下跌」；默认 S&amp;P100 近似口径，可在下方切换为全成分股）、<b>ETF 比值</b>（9 组结构比值的变化与 60 日 z-score，把「情绪」拆成可观测的风险因子）、<b>估值</b>（滚动 PE 及其 10 年分位、盈利收益率与实际利率之差）、<b>事件</b>（未来两周 FOMC、拍卖、财报与关键数据及一致预期）。</div>
 
   <h3 class="blk">市场广度 <span class="hint">成分股口径 · 日线收盘 · 口径可切换（见下）</span></h3>
   <div class="cards c5" id="breadth-cards"></div>
   <div class="chart small" id="ch-breadth"></div>
   <div class="mini" id="breadth-upgrade" style="color:var(--ink3);font-size:11.5px;margin-top:-6px"></div>
+
+  <h3 class="blk">ETF 结构比值 <span class="hint">9 组 · 5/20 日变化 · 60 日 z-score · 只读变化，不读绝对水平</span></h3>
+  <table class="matrix" id="etf-ratio-table"></table>
+  <div class="mini" id="etf-ratio-note" style="color:var(--ink3);font-size:11.5px"></div>
 
   <h3 class="blk">估值约束 <span class="hint">滚动 PE（multpl 月度）· 盈利收益率 − 实际利率</span></h3>
   <div class="cards c4" id="val-cards"></div>
@@ -335,9 +349,22 @@ h3.blk .hint{font-weight:400;color:var(--ink3);font-size:12px}
   <div class="mini" id="infl-note" style="color:var(--ink3);font-size:11.5px"></div>
 </section>
 
-<!-- ═══════════ ⑩ 每日研判 ═══════════ -->
+<!-- ═══════════ ⑩ 原油与成品油结构 ═══════════ -->
+<section>
+  <div class="sec-head"><h2>⑩ 原油与成品油结构</h2><span class="tag">Crude · Cracks · Inventories</span></div>
+  <div class="sec-desc" id="oil-desc">用四层证据判断油价下跌的性质：<b>价格与跨区价差</b>（WTI、Brent−WTI）→ <b>裂解价差</b>（成品油相对原油的加工价值，含 5 年分位，避免把「70 降到 67」误读成「10 降到 7」）→ <b>库存与炼厂投入</b>（EIA 周度，验证「炼厂是否真的降负」）→ <b>状态判别</b>（把「复产 / 供应增加 / 需求转弱」三种情形转成可观测条件）。亚洲口径（新加坡柴油对 Dubai、Dubai 月差、中东装船到港）无免费源，见文末缺口。</div>
+  <div class="cards c4" id="oil-cards"></div>
+  <div class="chart mid" id="ch-crack"></div>
+  <h3 class="blk">库存与炼厂 <span class="hint">EIA 周度 · 4 周变化 / 同比 / 相对前 5 年同期</span></h3>
+  <table class="matrix" id="oil-inv-table"></table>
+  <h3 class="blk">状态判别 <span class="hint">三类情形各 3 个条件，≥2 且唯一领先才成立</span></h3>
+  <div id="oil-regime"></div>
+  <div class="mini" id="oil-gaps" style="color:var(--ink3);font-size:11.5px"></div>
+</section>
+
+<!-- ═══════════ ⑪ 每日研判 ═══════════ -->
 <section id="sec-calls">
-  <div class="sec-head"><h2>⑩ 每日研判</h2><span class="tag">Daily Calls</span></div>
+  <div class="sec-head"><h2>⑪ 每日研判</h2><span class="tag">Daily Calls</span></div>
   <div id="shock-block" style="margin:2px 0 18px"></div>
   <div id="calls-body">
     <div class="sig-box"><div class="sb-t">今日研判待补充</div>
