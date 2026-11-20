@@ -30,6 +30,7 @@ const state = {
   ctaQuery: "",
   ctaSector: "all",
   ctaDirection: "all",
+  ctaBoard: "all",
   activeCtaSymbol: null,
   focusTechnicalSymbol: null,
   bmWindow: "5",
@@ -133,6 +134,14 @@ function summaryCard(label, value, note, tone = "") {
   return `<article class="summary-card"><div class="summary-label">${label}</div><div class="summary-value ${tone}">${value}</div><div class="summary-note">${note}</div></article>`;
 }
 
+/* 金额口径提示（2026-11-20 审计 P1-6）：席位合成金额 = 手数 × 每手保证金。
+   行情合约与保证金合约不同月时，金额含邻月估算误差，不能读成精确资金净流入。 */
+function scopeNote(item) {
+  if (item?.amountScope === "adjacent") return ` · 邻月估算（保证金取 ${item.margin?.contract || "—"}）`;
+  if (item?.amountScope === "unknown") return " · 合约无法对应";
+  return "";
+}
+
 function renderSummary() {
   const snapshot = currentSnapshot();
   const summary = snapshot.summary;
@@ -145,10 +154,10 @@ function renderSummary() {
     summaryCard("三方净方向", `${summary.bullishCount} 多 / ${summary.bearishCount} 空`, `商品样本 ${summary.instrumentCount} 个，按保证金金额判断`),
     /* CTA 强档提到主位：5 日远期收益回测里只有它具备明显超额，
        家人反向的超额约 +0.01%，仅作参考（详见页面底部口径说明）。 */
-    summaryCard("CTA 强档", `${ctaStrongBull} 强多 / ${ctaStrongBear} 强空`, "5日回测：强多 +0.80%、强空 −0.70%（胜率 55.3% / 39.7%）", ctaStrongBull > ctaStrongBear ? "bull-text" : ctaStrongBear > ctaStrongBull ? "bear-text" : "neutral-text"),
+    summaryCard("CTA 强档", `${ctaStrongBull} 强多 / ${ctaStrongBear} 强空`, backtestLine("full"), ctaStrongBull > ctaStrongBear ? "bull-text" : ctaStrongBear > ctaStrongBull ? "bear-text" : "neutral-text"),
     summaryCard("内外资同向", summary.domesticForeignSameCount || 0, `家人反向 ${summary.familyReverseCount || 0} 个（仅参考，无超额）`),
-    summaryCard("最强净多", bull ? `${bull.variety} ${bull.symbol}` : "暂无", bull ? formatAmount(bull.amountSignal) : "今日无净多品种", "bull-text"),
-    summaryCard("最强净空", bear ? `${bear.variety} ${bear.symbol}` : "暂无", bear ? formatAmount(bear.amountSignal) : "今日无净空品种", "bear-text"),
+    summaryCard("最强净多", bull ? `${bull.variety} ${bull.symbol}` : "暂无", bull ? `${formatAmount(bull.amountSignal)}${scopeNote(bull)}` : "今日无净多品种", "bull-text"),
+    summaryCard("最强净空", bear ? `${bear.variety} ${bear.symbol}` : "暂无", bear ? `${formatAmount(bear.amountSignal)}${scopeNote(bear)}` : "今日无净空品种", "bear-text"),
     summaryCard("保证金覆盖", `${(summary.marginCoverage * 100).toFixed(0)}%`, `${summary.marginSourceUpdate || "来源时间未披露"} · ${summary.marginCacheNote || "状态未知"}`),
   ].join("");
   const latestDisclosure = snapshot.disclosureDates.at(-1) || "未披露";
@@ -193,6 +202,25 @@ function renderTide() {
     </button>`).join("");
     return `<article class="tide-block ${tone}"><header><span>${escapeHtml(bucket.label)}</span><strong>${bucket.count}</strong></header>${bucket.meaning ? `<p class="tide-meaning">${escapeHtml(bucket.meaning)}</p>` : ""}<div>${rows || `<p class="empty-side">该象限暂无品种</p>`}</div></article>`;
   }).join("");
+
+  /* 计数必须能对上（2026-11-20 审计 P0-3）：象限只放方向×涨跌都可比的样本，
+     席位为 0、价格平盘、无行情的品种单列，避免把缺失读成方向。 */
+  const note = $("#tideNote");
+  if (!note) return;
+  const meta = currentSnapshot().tideMeta;
+  if (!meta) { note.textContent = ""; return; }
+  const exceptions = currentSnapshot().tideExceptions || [];
+  const reasons = exceptions.reduce((acc, entry) => {
+    const key = entry.excludeReason || "未分类";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const detail = Object.entries(reasons).map(([key, count]) => `${key} ${count}`).join("、");
+  const summary = currentSnapshot().summary || {};
+  note.textContent = `四象限于 ${meta.quadrantTotal} 个可比样本（方向 × 涨跌）；`
+    + `${detail ? `另有 ${detail}，不计入象限。` : ""}`
+    + `方向计数 ${summary.bullishCount ?? "—"} 偏多 / ${summary.bearishCount ?? "—"} 偏空（按席位方向，含平盘），`
+    + `合计 ${meta.total} 个品种。`;
 }
 
 /* 四 大资金趋势变化：内资+外资 5/10/20 日资金趋势 + 家人席位参考标注
@@ -302,7 +330,7 @@ function renderCorePanorama() {
       <span>${rCell(r30)}</span>
       <span class="panorama-signal"><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong><small class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</small></span>
       <span>${groupBars(item)}</span>
-      <span class="panorama-tags"><span class="tag tag-cta ${ctaClass}">${escapeHtml(ctaSignal || "无 CTA")}</span><span class="tag tag-ref">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
+      <span class="panorama-tags"><span class="tag tag-cta ${ctaClass}">${escapeHtml(ctaSignal || "无 CTA")}</span>${item.modelDivergence ? `<span class="tag tag-warn" title="机构单独看为${item.institutionHands > 0 ? "偏多" : "偏空"}，加入家人反向假设后翻转为${item.handsSignal > 0 ? "偏多" : "偏空"}">模型分歧</span>` : ""}<span class="tag tag-ref">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
     </button>`;
   }).join("")}</div></section>`).join("")}`;
 }
@@ -393,7 +421,7 @@ function renderInstrumentTable() {
     const closeCell = close == null ? `<span class="gray">暂无</span>` : `${numeric(close).toLocaleString("zh-CN", {maximumFractionDigits: 4})}<span class="${dayReturn == null ? "gray" : signClass(dayReturn)}" style="margin-left:6px">${dayReturn == null ? "—" : `${formatSigned(dayReturn, 2)}%`}</span>`;
     return `<tr class="${item.symbol === state.activeSymbol ? "is-active" : ""}" data-symbol="${escapeHtml(item.symbol)}">
     <td><div class="instrument-name"><button type="button" data-open-detail-symbol="${escapeHtml(item.symbol)}">${escapeHtml(item.variety)}</button><small>${escapeHtml(item.symbol)} · ${escapeHtml(item.sector)}</small></div></td>
-    <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</td>
+    <td class="num ${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}${item.modelDivergence ? `<small class="tag tag-warn row-flag" title="机构 ${formatHands(item.institutionHands)} 手（${item.institutionHands > 0 ? "偏多" : "偏空"}），加入家人反向假设后翻转为${item.handsSignal > 0 ? "偏多" : "偏空"}">分歧</small>` : ""}<small class="instrument-sub">机构 ${item.institutionHands > 0 ? "+" : ""}${formatHands(item.institutionHands)} 手${item.amountScope === "adjacent" ? " · 金额邻月估算" : item.amountScope === "unknown" ? " · 合约无法对应" : ""}</small></td>
     <td><span class="tag ${dirClass(item.amountSignal)}">${escapeHtml(item.resonance.label || item.direction)}</span></td>
     <td class="num">${closeCell}</td>
     <td class="num ${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</td>
@@ -661,7 +689,7 @@ function renderDetailWorkspace() {
     <nav class="detail-subnav" aria-label="品种详情导航"><button class="is-active" data-detail-anchor="detail-overview">总览</button><button data-detail-anchor="detail-positioning">资金与席位</button><button data-detail-anchor="detail-technical">技术面</button><button data-detail-anchor="detail-fundamental">基本面</button><button data-detail-anchor="detail-events">历史事件</button></nav>
     <section id="detail-overview" class="detail-dashboard-grid">
       <article class="detail-surface chart-surface"><div class="detail-section-head"><div><small>PRICE & SEAT DIRECTION</small><h3>价格与席位合成方向</h3></div><div class="detail-legend"><i></i>收盘价 <b></b>席位合成净变化</div></div><div class="combo-chart-wrap">${priceFlowChart(series, item.variety)}</div><div class="detail-chart-foot"><span>历史快照 <b>${series.length} 日</b></span><span>今日手数 <b class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)}</b></span><span>边际结构 <b>${escapeHtml(item.marginalStructure)}</b></span></div></article>
-      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>模型计算</dt><dd>席位合成方向 ${formatAmount(item.amountSignal)}。这是按席位分组与保证金换算得到的自建指标，不等于真实资金净流入。</dd></div><div><dt>数据口径</dt><dd>${escapeHtml(contract.text || "合约缺失")}${contract.conflicts.length ? `；<b class="bear-text">${contract.conflicts.join("、")}合约与行情不同月</b>，价格与技术位不可直接比较` : "；三处合约一致"}</dd></div><div><dt>策略判断</dt><dd>${ctaRow ? `CTA ${escapeHtml(ctaRow.signal)}（${formatSigned(ctaRow.score)}，覆盖 ${ctaRow.coverage}%）` : "CTA 未覆盖"}；${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”（参考）。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
+      <aside class="detail-surface executive-surface"><div class="detail-section-head"><div><small>EXECUTIVE READ</small><h3>今日研究读数</h3></div></div><dl><div><dt>模型计算</dt><dd>席位合成方向 ${formatAmount(item.amountSignal)}。这是按席位分组与保证金换算得到的自建指标，不等于真实资金净流入。</dd></div><div><dt>方向口径</dt><dd>机构（内资+外资）${formatHands(item.institutionHands)} 手 → <b class="${signClass(item.institutionHands)}">${item.institutionHands > 0 ? "偏多" : item.institutionHands < 0 ? "偏空" : "无方向"}</b>；加入家人反向假设后合成为 ${formatHands(item.handsSignal)} 手 → <b class="${signClass(item.handsSignal)}">${item.handsSignal > 0 ? "偏多" : item.handsSignal < 0 ? "偏空" : "无方向"}</b>。${item.modelDivergence ? `<b class="bear-text">两者相反，方向取决于家人反向假设是否成立（该假设 5 日远期超额约 +0.03%，不具统计意义）。</b>` : "两者同向。"}</dd></div><div><dt>数据口径</dt><dd>${escapeHtml(contract.text || "合约缺失")}${contract.conflicts.length ? `；<b class="bear-text">${contract.conflicts.join("、")}合约与行情不同月</b>，价格与技术位不可直接比较` : "；三处合约一致"}</dd></div><div><dt>策略判断</dt><dd>${ctaRow ? `CTA ${escapeHtml(ctaRow.signal)}（${formatSigned(ctaRow.score)}，覆盖 ${ctaRow.coverage}%）` : "CTA 未覆盖"}；${escapeHtml(technicalRead)}；席位信号为“${escapeHtml(item.resonance.label || item.direction)}”（参考）。这是规则化解读，不是接口原文。</dd></div><div><dt>基本面验证</dt><dd>${escapeHtml(fundamentalRead)}</dd></div></dl><button class="detail-action" data-create-decision="${escapeHtml(item.symbol)}">转入人工决策</button><button class="detail-action secondary" data-history-context="${escapeHtml(item.symbol)}">查看完整历史路径</button></aside>
     </section>
     <section id="detail-positioning" class="detail-surface detail-wide-section"><div class="detail-section-head"><div><small>POSITIONING</small><h3>资金与席位结构</h3></div><p>存量净持仓与今日边际分列；家人按原始方向展示</p></div><div class="position-matrix"><div class="position-matrix-head"><span>资金群体</span><span>存量净持仓</span><span>今日手数净变动</span><span>今日净金额</span><span>边际动作</span></div>${groupRows.map(([label, group]) => `<div class="position-matrix-row"><b>${label}</b>${positionVisual(group.netPosition, stockScale)}<strong class="${signClass(group.hands)}">${formatHands(group.hands)}</strong><strong class="${signClass(group.amount)}">${formatAmount(group.amount)}</strong><span class="${signClass(numeric(group.longChange) - numeric(group.shortChange))}">${escapeHtml(flowAction(group))}</span></div>`).join("")}</div><div class="seat-rank-grid detail-ranks"><div class="seat-rank-list"><div class="seat-rank-title bull-text">净多席位 ${item.brokerRanking.netLong.length}/5 <span>${rankingDominance(item.brokerRanking.netLong)}</span></div>${rankRows(item.brokerRanking.netLong, "bull-text", "暂无净多席位")}</div><div class="seat-rank-list"><div class="seat-rank-title bear-text">净空席位 ${item.brokerRanking.netShort.length}/5 <span>${rankingDominance(item.brokerRanking.netShort)}</span></div>${rankRows(item.brokerRanking.netShort, "bear-text", "暂无净空席位")}</div></div></section>
     <section id="detail-technical" class="detail-surface detail-wide-section technical-section compact-technical"><div class="detail-section-head"><div><small>TECHNICAL EXECUTION</small><h3>双周期技术验证</h3></div><span class="detail-stamp ${technical?.bias === "偏多" ? "bullish" : technical?.bias === "偏空" ? "bearish" : "neutral"}">${technical ? escapeHtml(technical.bias) : "未接入"}</span></div>
@@ -1240,6 +1268,13 @@ function trendStateByReturn(r5) {
 /* 关键事件标签多/空分类 */
 function classifyEvent(text) {
   const t = String(text || "");
+  /* 先解析完整动作，再退回单字匹配（2026-11-20 审计）。
+     旧实现「空|跌|减」并列，导致「减空」（减少空头，其实是偏多）被判成偏空，
+     在复盘归因这种最需要准确的地方引入反向标签。 */
+  if (/减空|空头减仓|平空|空单减/.test(t)) return { tone: "up", flag: "多" };
+  if (/减多|多头减仓|平多|多单减/.test(t)) return { tone: "down", flag: "空" };
+  if (/加空|增空|空头加仓|空单增/.test(t)) return { tone: "down", flag: "空" };
+  if (/加多|增多|多头加仓|多单增/.test(t)) return { tone: "up", flag: "多" };
   if (/空|跌|减|利空|偏弱|下跌/.test(t)) return { tone: "down", flag: "空" };
   if (/多|涨|增|利多|偏强|上涨/.test(t)) return { tone: "up", flag: "多" };
   return { tone: "neutral", flag: "" };
@@ -1630,7 +1665,17 @@ function renderCta() {
   const sectors = [...new Set(allRows.map((row) => row.sector))].sort();
   $("#ctaSectorFilter").innerHTML = `<option value="all">全部板块</option>${sectors.map((sector) => `<option value="${escapeHtml(sector)}" ${sector === state.ctaSector ? "selected" : ""}>${escapeHtml(sector)}</option>`).join("")}`;
   const query = state.ctaQuery.trim().toLowerCase();
-  const rows = allRows.filter((row) => (!query || `${row.variety}${row.symbol}`.toLowerCase().includes(query)) && (state.ctaSector === "all" || row.sector === state.ctaSector) && (state.ctaDirection === "all" || row.signal === state.ctaDirection));
+  const rows = allRows.filter((row) => {
+    if (query && !`${row.variety}${row.symbol}`.toLowerCase().includes(query)) return false;
+    if (state.ctaSector !== "all" && row.sector !== state.ctaSector) return false;
+    if (state.ctaDirection !== "all" && row.signal !== state.ctaDirection) return false;
+    /* 榜单分层（2026-11-20 审计 P0-2）：覆盖率不足 60% 的品种只剩趋势一个因子，
+       与多因子齐全的品种共用同一排名会让单因子强信号抢走综合榜前列，故分开看。 */
+    if (state.ctaBoard === "composite" && row.board !== "composite") return false;
+    if (state.ctaBoard === "single" && row.board !== "single") return false;
+    if (state.ctaBoard === "conflict" && !row.directionConflict) return false;
+    return true;
+  });
   const bull = rows.filter((row) => row.score >= 15).length;
   const bear = rows.filter((row) => row.score <= -15).length;
   $("#ctaSummary").innerHTML = [
@@ -1639,7 +1684,17 @@ function renderCta() {
     summaryCard("中性", rows.length - bull - bear, "-15 至 +15"),
     summaryCard("偏空", bear, "分数不高于 -15", "bear-text"),
   ].join("");
-  $("#ctaRows").innerHTML = rows.map((row, index) => `<tr data-cta-symbol="${escapeHtml(row.symbol)}" class="${row.symbol === state.activeCtaSymbol ? "is-selected" : ""}"><td>${index + 1}</td><td><strong>${escapeHtml(row.variety)}</strong><small>${escapeHtml(row.symbol)}</small></td><td>${escapeHtml(row.sector)}</td><td class="${dirTextClass(row.direction?.trend)}">${escapeHtml(row.direction?.trend || "—")}</td><td class="${dirTextClass(row.direction?.seat)}">${escapeHtml(row.direction?.seat || "—")}</td><td class="${row.direction?.consistency === "背离" ? "bear-text" : row.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(row.direction?.consistency || "—")}</td><td class="cta-score ${signClass(row.score)}">${formatSigned(row.score)}</td><td>${row.coverage}%</td><td class="${signClass(row.score)}">${escapeHtml(row.signal)}</td></tr>`).join("") || `<tr><td colspan="6">没有匹配品种。</td></tr>`;
+  $("#ctaRows").innerHTML = rows.map((row, index) => `<tr data-cta-symbol="${escapeHtml(row.symbol)}" class="${row.symbol === state.activeCtaSymbol ? "is-selected" : ""}"><td>${index + 1}</td><td><strong>${escapeHtml(row.variety)}</strong><small>${escapeHtml(row.symbol)}</small>${row.board === "single" ? `<small class="tag tag-ref row-flag">单因子</small>` : row.directionConflict ? `<small class="tag tag-warn row-flag">趋势背离</small>` : ""}</td><td>${escapeHtml(row.sector)}</td><td class="${dirTextClass(row.direction?.trend)}">${escapeHtml(row.direction?.trend || "—")}</td><td class="${dirTextClass(row.direction?.seat)}">${escapeHtml(row.direction?.seat || "—")}</td><td class="${row.direction?.consistency === "背离" ? "bear-text" : row.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(row.direction?.consistency || "—")}</td><td class="cta-score ${signClass(row.score)}">${formatSigned(row.score)}</td><td>${row.coverage}%</td><td class="${signClass(row.score)}">${escapeHtml(row.signal)}</td></tr>`).join("") || `<tr><td colspan="6">没有匹配品种。</td></tr>`;
+  const btEl = $("#ctaBacktest");
+  if (btEl) {
+    if (!backtestData) {
+      btEl.textContent = "信号业绩：未加载（data/backtest.json）。";
+    } else {
+      const caveat = backtestData.caveat || "";
+      btEl.innerHTML = `<b>信号业绩（5 日，按信号方向计收益）</b>　全样本 ${escapeHtml(backtestLine("full"))}　|　近期 ${escapeHtml(backtestLine("recent"))}`
+        + `<br>两个窗口结论相反，说明强档表现依赖区间，不能当作稳定优势。${escapeHtml(caveat)}`;
+    }
+  }
   const selected = rows.find((row) => row.symbol === state.activeCtaSymbol) || rows[0];
   state.activeCtaSymbol = selected?.symbol || null;
   $("#ctaDetail").innerHTML = selected ? `<div class="detail-kicker">CTA FACTOR BREAKDOWN</div><h3>${escapeHtml(selected.variety)} <small>${escapeHtml(selected.symbol)}</small></h3><div class="cta-detail-score ${signClass(selected.score)}">${formatSigned(selected.score)} <small>${escapeHtml(selected.signal)}</small></div><p>${escapeHtml(selected.sector)} · 可用因子覆盖 ${selected.coverage}% · 年化波动 ${selected.volatility ?? "—"}%</p><div class="cta-direction-row"><span>趋势 <b class="${dirTextClass(selected.direction?.trend)}">${escapeHtml(selected.direction?.trend || "—")}</b></span><span>席位 <b class="${dirTextClass(selected.direction?.seat)}">${escapeHtml(selected.direction?.seat || "—")}</b></span><span>边际 <b class="${dirTextClass(selected.direction?.marginal)}">${escapeHtml(selected.direction?.marginal || "—")}</b></span><span>一致性 <b class="${selected.direction?.consistency === "背离" ? "bear-text" : selected.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(selected.direction?.consistency || "—")}</b></span></div>${selected.direction?.consistency === "背离" ? `<div class="detail-source-notice bear-text">趋势与席位方向相反：总分把它们平均后可能显示为「中性」，但这本身是分歧信号，不应按平静处理。</div>` : ""}<div class="cta-factor-list">${Object.entries(CTA_FACTOR_LABELS).map(([key, label]) => `<article><div><strong>${label}</strong><span class="${selected.factors[key] == null ? "neutral-text" : signClass(selected.factors[key])}">${selected.factors[key] == null ? "未覆盖" : formatSigned(selected.factors[key])}</span></div><p>${escapeHtml(selected.evidence[key])}</p></article>`).join("")}</div>${renderMetal4d(selected)}<div class="detail-source-notice">缺失因子不按中性计分，而是按可用权重重算。截图是二级证据；评分不是回测后的交易策略或买卖建议。</div>` : `<div class="detail-empty">该筛选条件没有 CTA 品种。</div>`;
@@ -1886,6 +1941,7 @@ function bindEvents() {
   $("#decisionSymbolFilter").addEventListener("change", (event) => { state.decisionSymbol = event.target.value; state.decisionPage = 1; renderDecisionView(); });
   $("#decisionSearchInput").addEventListener("input", (event) => { state.decisionQuery = event.target.value; state.decisionPage = 1; renderDecisionView(); });
   $("#ctaSearchInput").addEventListener("input", (event) => { state.ctaQuery = event.target.value; renderCta(); });
+  $("#ctaBoardFilter")?.addEventListener("change", (event) => { state.ctaBoard = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaSectorFilter").addEventListener("change", (event) => { state.ctaSector = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaDirectionFilter").addEventListener("change", (event) => { state.ctaDirection = event.target.value; state.activeCtaSymbol = null; renderCta(); });
 }
@@ -1998,6 +2054,31 @@ function unpublishObservationCard(id) {
   renderDecisionView();
   renderHistoryView();
   renderCloudSyncStatus();
+}
+
+/* 信号业绩：不再写死在页面里（2026-11-20 审计 P0-4）。
+   数据来自 scripts/backtest_signals.py，随快照一起发布；按窗口分开，
+   避免用一组固定数字为每天的信号背书。 */
+let backtestData = null;
+function loadBacktest() {
+  return fetchWithRetry("data/backtest.json", {cache: "no-store"}, 1)
+    .then((data) => { backtestData = data; })
+    .catch(() => { backtestData = null; });
+}
+
+function backtestGroup(windowKey, group) {
+  return backtestData?.windows?.[windowKey]?.groups?.[group] || null;
+}
+
+function backtestLine(windowKey) {
+  const win = backtestData?.windows?.[windowKey];
+  if (!win) return "业绩未加载";
+  const bull = win.groups?.["CTA 强多"];
+  const bear = win.groups?.["CTA 强空"];
+  const fmt = (value) => value == null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
+  return `${win.span.from.slice(4)}–${win.span.to.slice(4)}（${win.span.snapshots} 日）：`
+    + `强多 ${fmt(bull?.signalReturnPct)} n=${bull?.n ?? "—"}，`
+    + `强空 ${fmt(bear?.signalReturnPct)} n=${bear?.n ?? "—"}`;
 }
 
 /* 快照懒加载层：启动只拉几 KB 的 meta + 最新日快照即出首屏（原整包 dashboard.json ~24MB）。
@@ -2115,6 +2196,7 @@ dashboardLoad
       renderHistoryView();
       renderCloudSyncStatus();
     });
+    loadBacktest().then(() => { renderSummary(); if (state.view === "cta") renderCta(); });
     preloadHistoricalSnapshots().then(() => { if (state.view !== "decisions") renderAll(); });
   })
   .catch((error) => {

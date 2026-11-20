@@ -1228,3 +1228,11 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .tag.tag-cta.is-bear { color: var(--down); border-color: var(--down); background: var(--down-soft); }
 .tag.tag-cta.is-flat { color: var(--gray); }
 .tag.tag-ref { color: var(--muted); border-style: dashed; font-weight: 400; opacity: .75; }
+
+/* 2026-11-20 审计修复：模型分歧 / 单因子 / 潮汐例外 / 业绩块 */
+.tag.tag-warn { color: #8a5a00; border: 1px solid #d9a441; background: #fdf6e3; font-weight: 600; }
+.row-flag { display: inline-block; margin-left: 4px; }
+.tide-note { margin: 8px 0 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); }
+.cta-backtest { margin: 8px 0 12px; padding: 10px 12px; font-size: 12px; line-height: 1.7; color: var(--muted); border-left: 2px solid var(--line-strong); background: var(--paper-soft); }
+.cta-backtest b { color: var(--ink); }
+.instrument-sub { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted); }
