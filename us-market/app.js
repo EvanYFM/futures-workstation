@@ -204,10 +204,15 @@ function renderLiquidity(L, t, structure) {
     `</div>`;
 
   const v = L.vol || {}, c = L.credit || {}, pc = v.put_call || {};
+  const cec = L.credit_equity_compare || {};
+  const cecLine = (cec.windows || []).map(w =>
+    `${w.n}日 <b class="${cls(w.hy_bp)}">${bp(w.hy_bp)}</b> / SPX <b class="${cls(w.spx_pct)}">${sgn(w.spx_pct)}${fmt(w.spx_pct)}%</b>${w.same_dates ? '' : '（日期不同）'}`
+  ).join(' · ');
   $('credit-cards').innerHTML = `
     <div class="card"><div class="k"><span>高收益债利差 HY OAS</span></div>
       <div class="v num">${fmt(c.hy_oas)}%</div>
-      <div class="s">${c.date || '—'} · 20日 ${bp(c.hy_oas_chg20)}（走阔=信用风险上升）</div></div>
+      <div class="s">${c.date || '—'} · 20日 ${bp(c.hy_oas_chg20)}（走阔=信用风险上升）</div>
+      ${cecLine ? `<div class="s" style="color:var(--ink3)">同窗口对照：${cecLine}</div>` : ''}</div>
     <div class="card"><div class="k"><span>MOVE（债市隐含波动）</span></div>
       <div class="v num">${fmt(v.move, 1)}</div>
       <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
@@ -687,13 +692,29 @@ function renderOil(O, t) {
       <td class="num ${cls(x.dev5y)}">${sgn(x.dev5y)}${fmt(x.dev5y)}%</td>
       <td class="num" style="color:var(--ink3)">${x.date ? x.date.slice(5) : '—'}</td></tr>`).join('');
 
+  const flowRows = O.refinery_ops || [];
+  const flowEl = $('oil-flow-table');
+  if (flowEl) {
+    flowEl.innerHTML = flowRows.length
+      ? '<colgroup><col style="width:200px"><col><col><col><col><col style="width:92px"></colgroup>' +
+        '<tr><th>指标</th><th>最新</th><th>4 周</th><th>同比</th><th>vs 前 5 年</th><th>数据日</th></tr>' +
+        flowRows.map(x => `<tr>
+          <td style="text-align:left">${x.name} <span style="color:var(--ink3);font-size:11px">${x.unit}</span></td>
+          <td class="num">${x.value == null ? '—' : x.value.toLocaleString('en-US', { maximumFractionDigits: x.unit === '%' ? 1 : 2 })}</td>
+          <td class="num ${cls(x.m4)}">${sgn(x.m4)}${fmt(x.m4)}%</td>
+          <td class="num ${cls(x.yoy)}">${sgn(x.yoy)}${fmt(x.yoy)}%</td>
+          <td class="num ${cls(x.dev5y)}">${sgn(x.dev5y)}${fmt(x.dev5y)}%</td>
+          <td class="num" style="color:var(--ink3)">${x.date ? x.date.slice(5) : '—'}</td></tr>`).join('')
+      : '<tr><td style="text-align:left;color:var(--ink3)">该快照不含炼厂运行数据（20261120 起启用）</td></tr>';
+  }
+
   const V = O.verdict || {};
   $('oil-regime').innerHTML =
     `<div class="shk-verdict">${V.label || '—'}</div>
      <div class="mini" style="color:var(--ink2);margin:2px 0 10px">${V.desc || ''}</div>` +
     (O.scenarios || []).map(s => `
-      <div class="oil-sc ${s.score >= 2 ? 'on' : ''}">
-        <div class="oil-sc-h"><b>${s.name}</b><span class="sc">${s.score}/3 条件成立</span></div>
+      <div class="oil-sc ${s.score >= 2 && s.score / s.items.length >= 0.6 ? 'on' : ''}">
+        <div class="oil-sc-h"><b>${s.name}</b><span class="sc">${s.score}/${s.items.length} 条件成立</span></div>
         <table class="oil-tb">
           <colgroup><col style="width:150px"><col style="width:110px"><col style="width:170px"><col style="width:64px"></colgroup>
           <tr><th>观测项</th><th>当前</th><th>成立条件</th><th>状态</th></tr>
