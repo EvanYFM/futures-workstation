@@ -100,7 +100,13 @@ function renderLiquidity(L, t, structure) {
   const bp = x => x == null ? '—' : `${sgn(x)}${x.toFixed(1)}bp`;
   $('fund-cards').innerHTML = [
     { k: 'SOFR（有担保隔夜融资）', v: f.sofr?.value, s: f.sofr?.date || '—', extra: `20日 ${bp(f.sofr?.chg20_bp)}`, cls: '' },
-    { k: 'SOFR − IORB（融资压力）', v: f.sofr_iorb_bp, unit: 'bp', s: (f.sofr_iorb_bp ?? 0) > 5 ? '转正走阔 → 准备金偏紧' : '为负/贴近零 → 融资宽松', extra: '', cls: cls(f.sofr_iorb_bp) },
+    { k: 'SOFR − IORB（融资压力）', v: f.sofr_iorb_bp, unit: 'bp',
+      s: f.sofr_iorb_bp == null
+        ? (f.sofr_iorb_basis?.same_day === false ? 'SOFR/IORB 不同日，不作差' : '—')
+        : (f.sofr_iorb_bp > 5 ? '转正走阔 → 准备金偏紧' : '为负/贴近零 → 融资宽松'),
+      extra: f.sofr_iorb_basis?.same_day === false
+        ? `${f.sofr_iorb_basis?.a_date || '—'} / ${f.sofr_iorb_basis?.b_date || '—'}`
+        : '', cls: f.sofr_iorb_bp == null ? '' : cls(f.sofr_iorb_bp) },
     { k: 'EFFR（无担保隔夜）', v: f.effr?.value, s: f.effr?.date || '—', extra: '', cls: '' },
     { k: 'IORB（准备金利率）', v: f.iorb?.value, s: f.iorb?.date || '—', extra: '政策利率走廊上沿', cls: '' },
   ].map(c => `<div class="card"><div class="k"><span>${c.k}</span></div>
@@ -331,8 +337,14 @@ function renderShock(S) {
   const groupName = { recession: '衰退交易', panic: '恐慌/流动性', structural: '结构性去AI' };
   const statusMark = { triggered: '●', near: '◐', ok: '○' };
   const dot = st => `<span class="shk ${st}">${statusMark[st]}</span>`;
-  const sc = S.scores || {}, tt = S.totals || {};
+  const sc = S.scores || {}, tt = S.totals || {}, ev = S.evidence || {};
   const chip = (k) => {
+    if (k === 'structural') {
+      // 2026-11-20：结构性只计直接证据（满分 2），背景条件不计分——不再显示成 2/4
+      const d = ev.direct ?? 0, c = ev.context ?? 0;
+      const cls = d === 2 ? 'up' : d === 1 ? 'flat' : 'down';
+      return `<span class="shk-chip"><b class="${cls}">结构性 直接 ${d}/2 · 背景 ${c}/2</b></span>`;
+    }
     const s = sc[k] || 0, t = tt[k] || 1, ratio = s / t;
     const c = ratio >= 0.6 ? 'up' : ratio >= 0.4 ? 'flat' : 'down';
     return `<span class="shk-chip"><b class="${c}">${groupName[k]} ${s}/${t}</b></span>`;
@@ -359,6 +371,7 @@ function renderShock(S) {
       <span class="shk-verdict">${S.verdict?.label || '—'}</span>
       <span style="color:var(--ink3);font-size:11.5px">${S.verdict?.desc || ''}${S.breadth_shape ? `（当日广度形态：${S.breadth_shape}）` : ''}</span>
     </div>
+    ${ev.reason ? `<div class="shk-delta" style="color:var(--ink3)">结构性去AI 未成立：${ev.reason}</div>` : ''}
     <div class="shk-chips">${chip('recession')}${chip('panic')}${chip('structural')}
       <span style="color:var(--ink3);font-size:11px;margin-left:6px">● 触发 · ◐ 接近 · ○ 未触发</span></div>
     ${(() => {
@@ -549,9 +562,9 @@ function renderBreadthValuation(DATA, t) {
       <div class="card"><div class="k"><span>10Y 实际利率</span></div>
         <div class="v num">${fmt(V.real10)}%</div>
         <div class="s">无风险实际回报基准</div></div>
-      <div class="card"><div class="k"><span>ERP（股债相对吸引力）</span></div>
+      <div class="card"><div class="k"><span>盈利收益率 − 10Y 实际利率（估值利差）</span></div>
         <div class="v num ${cls(V.erp_vs_real)}">${fmt(V.erp_vs_real)}pp</div>
-        <div class="s">盈利收益率 − 实际利率；越低=股票相对越贵</div></div>`;
+        <div class="s">按公式命名：这是估值比较指标，<b>不是</b>预期股票超额回报；十年分位主要来自月度 PE</div></div>`;
     const pc = makeChart('ch-pe');
     if (pc && V.hist?.length) {
       pc.setOption({
@@ -960,11 +973,16 @@ function renderAll(DATA) {
 
   /* ⑦ 研判 */
   if (DATA.calls && DATA.calls.cards) {
+    const au = DATA.calls.audit || {};
+    const nMis = (au.number_mismatches || []).length;
     $('calls-body').innerHTML =
       `${DATA.calls.generated_by === 'rules-v1' ? '<div class="mini" style="color:var(--ink3);margin:-6px 0 10px">本日研判为<b>规则模板</b>自动生成（未经模型判读）；数据与阈值可核对，观点性判断请以人工复盘为准。</div>' : ''}` +
+      `${nMis ? `<div class="mini" style="color:var(--ink3);margin:-6px 0 10px">数字复核：正文有 ${nMis} 处与快照字段不一致（可能引用历史日期），明细见 calls.audit。</div>` : ''}` +
       `<div class="call-cards">${DATA.calls.cards.map(c => `
         <div class="call-card"><span class="cc-tag ${c.cls}">${c.tag}</span>${c.h ? `<span class="cc-h">${c.h}</span>` : ''}
-        <div class="cc-t">${c.t}</div><div class="cc-b">${c.b}</div><div class="cc-e">${c.e}</div></div>`).join('')}</div>` +
+        ${c.target ? `<span class="cc-h">作用于：${c.target}${c.horizon ? ` · ${c.horizon}` : ''}</span>` : ''}
+        <div class="cc-t">${c.t}</div><div class="cc-b">${c.b}</div><div class="cc-e">${c.e}</div>
+        ${c.expire ? `<div class="cc-e" style="color:var(--ink3)">退出条件：${c.expire}</div>` : ''}</div>`).join('')}</div>` +
       (DATA.calls.sig ? `<div class="sig-box"><div class="sb-t">${DATA.calls.sig.t}</div><div class="sb-b">${DATA.calls.sig.b}</div></div>` : '');
   }
 }
