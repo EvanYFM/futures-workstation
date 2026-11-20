@@ -1012,6 +1012,26 @@ function renderAll(DATA) {
   }
 }
 
+/* 信号存档统计（2026-11-20）：只回答「信号方向与后续收益是否一致」，
+   不等价于组合收益——不含交易成本与仓位幅度 */
+function renderSignalStats(st) {
+  const el = $('signal-stats');
+  if (!el) return;
+  if (!st || !st.total_records) { el.innerHTML = ''; return; }
+  const grp = (k, label) => {
+    const t = (st.by_cls || {})[k] || {};
+    const t1 = t.t1, t5 = t.t5;
+    if (!t1) return '';
+    const s = v => `${v > 0 ? '+' : ''}${v}%`;
+    return `<b>${label}</b> T+1 ${s(t1.avg)}（${t1.n} 条，下跌 ${t1.down_rate}%）` +
+           (t5 ? ` · T+5 ${s(t5.avg)}（下跌 ${t5.down_rate}%）` : '');
+  };
+  const parts = [grp('reduce', 'reduce'), grp('watch', 'watch'), grp('over', 'over')].filter(Boolean);
+  el.innerHTML = `<b>信号存档</b>：${st.total_records} 条（已结算 ${st.settled_records}）` +
+    (parts.length ? `<br>${parts.join(' · ')}` : '') +
+    `<br><span style="color:var(--ink3)">${st.note || ''}</span>`;
+}
+
 /* ══════════ 数据加载与日期导航 ══════════ */
 const state = { dates: [], cur: null, cache: {} };
 
@@ -1057,6 +1077,7 @@ async function boot() {
     state.dates = meta.dates || [];
     if (!state.dates.length) throw new Error('无快照');
     $('date-sel').innerHTML = state.dates.map(d => `<option value="${d}">${d}</option>`).join('');
+    renderSignalStats(meta.signalStats);
     await loadDate(state.dates[0]);
   } catch (e) {
     $('db-status').textContent = `初始化失败：${e.message}`;
