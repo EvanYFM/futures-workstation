@@ -258,10 +258,11 @@ function renderStructure(S, t) {
       <div class="s">等权 − 市值权：<b class="${cls(ix.spread)}">${sgn(ix.spread)}${fmt(ix.spread)}pp</b>${ix.sector_up != null ? ` · 板块上涨 ${ix.sector_up}/${ix.sector_total}` : ''}</div></div>
     <div class="card"><div class="k"><span>AI 链等权篮子</span></div>
       <div class="v num ${cls(ai.basket_d1)}">${sgn(ai.basket_d1)}${fmt(ai.basket_d1)}%</div>
-      <div class="s">相对标普 <b class="${cls(ai.vs_spx_d1)}">${sgn(ai.vs_spx_d1)}${fmt(ai.vs_spx_d1)}pp</b> · 非AI 8行业 ${sgn(na.basket_d1)}${fmt(na.basket_d1)}%</div></div>
+      <div class="s">相对标普 <b class="${cls(ai.vs_spx_d1)}">${sgn(ai.vs_spx_d1)}${fmt(ai.vs_spx_d1)}pp</b> · 非AI 8行业 ${sgn(na.basket_d1)}${fmt(na.basket_d1)}%</div>
+      ${ai.vs_xlk_d1 != null ? `<div class="s" style="color:var(--ink3)">相对 XLK <b class="${cls(ai.vs_xlk_d1)}">${sgn(ai.vs_xlk_d1)}${fmt(ai.vs_xlk_d1)}pp</b> · 相对行业匹配 <b class="${cls(ai.vs_sector_matched_d1)}">${sgn(ai.vs_sector_matched_d1)}${fmt(ai.vs_sector_matched_d1)}pp</b>（剥离行业后的选股效应）</div>` : ''}</div>
     <div class="card"><div class="k"><span>离散度：z≥2 个股</span></div>
       <div class="v num">${disp.z2_count ?? '—'}<span style="font-size:13px;color:var(--ink3)"> / ${disp.universe ?? '—'}</span></div>
-      <div class="s">横截面标准差 ${fmt(disp.cs_std)}% · 跟踪池口径，非全市场</div></div>`;
+      <div class="s">横截面标准差 ${fmt(disp.cs_std)}% · 固定池 ${disp.pool_key || '—'}（${disp.universe ?? '—'}/${disp.pool_expected ?? '—'}）${(disp.pool_missing || []).length ? ` · 缺 ${disp.pool_missing.length} 只` : ''}</div></div>`;
 
   const groups = {};
   (S.watchlist || []).forEach(w => {
@@ -531,7 +532,10 @@ function renderBreadthValuation(DATA, t) {
         <div class="s">${B.date} · ${B.note}</div></div>`;
     const upEl = $('breadth-upgrade');
     if (upEl) upEl.innerHTML = `<b>数据口径</b>：${B.universe_label || '—'}（覆盖 ${B.covered}/${B.universe}）` +
-      (B.upgrade ? ` · <span style="color:var(--ink2)">升级入口：${B.upgrade}</span>` : '');
+      (B.upgrade ? ` · <span style="color:var(--ink2)">升级入口：${B.upgrade}</span>` : '') +
+      (B.cross_day && B.cross_day.comparable === false
+        ? `<br><b>口径切换，跨日不可比</b>：${B.cross_day.note}（对比 ${B.cross_day.base_date}：${B.cross_day.prev_universe_key || '—'} → ${B.cross_day.cur_universe_key || '—'}）`
+        : '');
     const bc = makeChart('ch-breadth');
     if (bc) {
       const labels = ['上涨占比', '20日线上方', '50日线上方', '200日线上方'];
