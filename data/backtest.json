@@ -1,0 +1,102 @@
+{
+  "generatedFrom": "scripts/backtest_signals.py",
+  "windows": {
+    "full": {
+      "span": {
+        "from": "20260625",
+        "to": "20261119",
+        "snapshots": 100
+      },
+      "meta": {
+        "horizon": 5,
+        "entryConventions": [
+          "signal_day_close",
+          "next_day_close"
+        ],
+        "modelVersion": "workstation-2026.10.26",
+        "universe": "站内 58 品种，按快照 quote.close 计算，未剔除跨换月合约",
+        "cost": "未计手续费、滑点与保证金占用"
+      },
+      "groups": {
+        "CTA 强多": {
+          "n": 742,
+          "meanPct": 0.478,
+          "signalReturnPct": 0.478,
+          "directionHit": 53.4,
+          "excessPct": 0.53
+        },
+        "CTA 强空": {
+          "n": 812,
+          "meanPct": -0.629,
+          "signalReturnPct": 0.629,
+          "directionHit": 58.7,
+          "excessPct": -0.577
+        },
+        "三方共振": {
+          "n": 902,
+          "meanPct": 0.297,
+          "signalReturnPct": 0.297,
+          "directionHit": 53.3,
+          "excessPct": 0.349
+        },
+        "家人反向共振": {
+          "n": 2876,
+          "meanPct": -0.023,
+          "signalReturnPct": -0.023,
+          "directionHit": 48.5,
+          "excessPct": 0.029
+        }
+      },
+      "baselineMeanPct": -0.052
+    },
+    "recent": {
+      "span": {
+        "from": "20261027",
+        "to": "20261112",
+        "snapshots": 13
+      },
+      "meta": {
+        "horizon": 5,
+        "entryConventions": [
+          "signal_day_close",
+          "next_day_close"
+        ],
+        "modelVersion": "workstation-2026.10.26",
+        "universe": "站内 58 品种，按快照 quote.close 计算，未剔除跨换月合约",
+        "cost": "未计手续费、滑点与保证金占用"
+      },
+      "groups": {
+        "CTA 强多": {
+          "n": 43,
+          "meanPct": -6.79,
+          "signalReturnPct": -6.79,
+          "directionHit": 11.6,
+          "excessPct": -4.373
+        },
+        "CTA 强空": {
+          "n": 100,
+          "meanPct": -0.016,
+          "signalReturnPct": 0.016,
+          "directionHit": 43.0,
+          "excessPct": 2.401
+        },
+        "三方共振": {
+          "n": 71,
+          "meanPct": -2.544,
+          "signalReturnPct": -2.544,
+          "directionHit": 31.0,
+          "excessPct": -0.127
+        },
+        "家人反向共振": {
+          "n": 291,
+          "meanPct": -2.133,
+          "signalReturnPct": -2.133,
+          "directionHit": 35.7,
+          "excessPct": 0.284
+        }
+      },
+      "baselineMeanPct": -2.417
+    }
+  },
+  "caveat": "样本为站内快照期数，跨品种混合，未计成本与换月价差，不构成统计显著结论。"
+}
