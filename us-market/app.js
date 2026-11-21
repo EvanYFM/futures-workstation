@@ -216,9 +216,10 @@ function renderLiquidity(L, t, structure) {
     <div class="card"><div class="k"><span>MOVE（债市隐含波动）</span></div>
       <div class="v num">${fmt(v.move, 1)}</div>
       <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
-    <div class="card"><div class="k"><span>VIX − VIX3M（期限结构）</span></div>
+    <div class="card"><div class="k"><span>波动率期限结构（9D / 30D / 3M）</span></div>
       <div class="v num ${v.term == null ? '' : cls(v.term)}">${v.term == null ? '—' : sgn(v.term) + fmt(v.term)}</div>
-      <div class="s">VIX ${fmt(v.vix)}（${v.vix_date || '—'}）/ 3M ${fmt(v.vix3m)}（${v.vix3m_date || '—'}）· ${v.term == null ? (v.term_note || '日期不一致，不判断') : (v.term > 0 ? '倒挂 → 近端恐慌' : '正挂 → 短期平静')}</div></div>
+      <div class="s">9D ${fmt(v.vix9d)} · 30D ${fmt(v.vix)} · 3M ${fmt(v.vix3m)}${v.vix9d_term != null ? ` · 9D−30D <b class="${cls(v.vix9d_term)}">${sgn(v.vix9d_term)}${fmt(v.vix9d_term)}</b>` : ''}</div>
+      <div class="s">${v.term == null ? (v.term_note || '日期不一致，不判断') : (v.term > 0 ? '30D 贵于 3M → 近端恐慌' : '30D 低于 3M → 短期平静')}${v.vix9d_term_note ? ` · ${v.vix9d_term_note}` : ''}</div></div>
     <div class="card"><div class="k"><span>SKEW（尾部风险定价）</span></div>
       <div class="v num">${fmt(v.skew, 1)}</div>
       <div class="s">${v.skew != null && v.skew > 145 ? '偏高 → 机构在买崩盘保护' : '常态区间'} · ${v.skew_date || '—'}</div></div>
@@ -394,6 +395,32 @@ function renderShock(S) {
     <table class="matrix shk-table"><colgroup><col style="width:26px"><col style="width:112px"><col><col style="width:150px"><col style="width:180px"></colgroup>
       <tr><th></th><th>模板</th><th>信号</th><th>当前</th><th>阈值</th></tr>${rows}</table>
     <div class="mini" style="color:var(--ink3);font-size:11px;margin-top:4px">${S.note || ''}</div>`;
+}
+
+/* 双向确认清单（2026-11-21）：风险升级 vs 修复确认并列 */
+function renderChecklist(C) {
+  const el = $('checklist-block');
+  if (!el) return;
+  if (!C || !C.risk || !C.repair) { el.innerHTML = ''; return; }
+  const col = (title, g, hl) => `
+    <div style="flex:1;min-width:300px">
+      <div class="mini" style="margin-bottom:5px"><b>${title}</b>
+        <span class="${g.hits >= 3 ? hl : ''}" style="margin-left:6px">${g.hits}/${g.total}</span></div>
+      <table class="matrix" style="margin:0">
+        <colgroup><col style="width:142px"><col style="width:104px"><col></colgroup>
+        ${g.items.map(it => `<tr>
+          <td style="text-align:left"><span class="shk ${it.hit ? 'triggered' : 'ok'}">${it.hit ? '●' : '○'}</span> ${it.label}</td>
+          <td class="num">${it.value}</td>
+          <td style="color:var(--ink3);font-size:11px">${it.threshold}</td></tr>`).join('')}
+      </table>
+    </div>`;
+  el.innerHTML = `
+    <div class="shk-head"><span class="shk-verdict">双向确认：${C.state || '—'}</span></div>
+    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:6px">
+      ${col('风险升级（向全市场扩散）', C.risk, 'up')}
+      ${col('修复确认（止跌与反向 Vanna）', C.repair, 'down')}
+    </div>
+    <div class="mini" style="color:var(--ink3);font-size:11px;margin-top:5px">${C.note || ''}</div>`;
 }
 
 /* ══════════ ⑨ 通胀与实际利率 ══════════ */
@@ -874,6 +901,7 @@ function renderAll(DATA) {
   renderOil(DATA.oil, t);
   /* ⑪ 冲击诊断 */
   renderShock(DATA.shock);
+  renderChecklist(DATA.checklist);
 
   /* ⑤ 收益率曲线 */
   const R = DATA.rates;
