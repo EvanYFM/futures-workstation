@@ -145,6 +145,17 @@ function renderLiquidity(L, t, structure) {
           (pn.net_liquidity ? ` · 净流动性 ${pn.net_liquidity}` : '') +
           (pn.reserves_ratio ? ` · 准备金占比 ${pn.reserves_ratio}` : '')
         : '');
+    const ol = b.outlook || {};
+    if ((ol.paths || []).length) {
+      const range = p => `$${(p.low_bn / 1000).toFixed(2)}–${(p.high_bn / 1000).toFixed(2)} 万亿` +
+        `（分位 ${p.pctile_low}%–${p.pctile_high}%）`;
+      const au = ol.auction;
+      $('netliq-note').innerHTML +=
+        `<br><b>前瞻（机械外推，非预测）</b>：` +
+        ol.paths.map(p => `${p.weeks} 周后 ${range(p)}`).join(' · ') +
+        (au ? ` · 未来 14 天国债拍卖 ${au.count} 笔${au.amount_bn ? `、毛额 $${au.amount_bn}B` : ''}` : '') +
+        `<span style="color:var(--ink3)"> · ${ol.note || ''}</span>`;
+    }
   }
 
   const ratios = L.ratios || [];
