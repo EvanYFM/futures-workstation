@@ -129,12 +129,22 @@ function renderLiquidity(L, t, structure) {
           data: [{ type: 'average' }] } }]
     });
     $('liq-desc').innerHTML =
-      `净流动性 <b>$${(b.net_liquidity_bn / 1000).toFixed(2)} 万亿</b>（联储总资产 $${(b.walcl.value_bn / 1000).toFixed(2)}T − TGA $${(b.tga ? b.tga.value_bn / 1000 : 0).toFixed(2)}T − RRP $${b.rrp ? b.rrp.value_bn : 0}B）。` +
+      `净流动性 <b>$${(b.net_liquidity_bn / 1000).toFixed(2)} 万亿</b>` +
+      (b.net_liquidity_pctile != null ? ` · <b>历史分位 ${b.net_liquidity_pctile}%</b>` : '') +
+      `（联储总资产 $${(b.walcl.value_bn / 1000).toFixed(2)}T − TGA $${(b.tga ? b.tga.value_bn / 1000 : 0).toFixed(2)}T − RRP $${b.rrp ? b.rrp.value_bn : 0}B）。` +
       `四层观察：资金价格 → 数量 → 信用与波动 → 风险偏好。`;
     const dn = b.dates || {};
+    const pn = b.pctile_window || {};
     $('netliq-note').innerHTML =
       `时点：WALCL ${dn.walcl || '—'} · TGA ${dn.tga || '—'} · RRP ${dn.rrp || '—'} · 准备金 ${dn.reserves || '—'}` +
-      (b.note ? ` · ${b.note}` : '');
+      (b.reserves_ratio_pct != null
+        ? ` · 准备金占银行总资产 <b>${b.reserves_ratio_pct}%</b>（历史分位 ${b.reserves_ratio_pctile}%）` : '') +
+      (b.note ? ` · ${b.note}` : '') +
+      (b.pctile_note
+        ? `<br>${b.pctile_note}` +
+          (pn.net_liquidity ? ` · 净流动性 ${pn.net_liquidity}` : '') +
+          (pn.reserves_ratio ? ` · 准备金占比 ${pn.reserves_ratio}` : '')
+        : '');
   }
 
   const ratios = L.ratios || [];
