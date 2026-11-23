@@ -31,6 +31,7 @@ const state = {
   ctaSector: "all",
   ctaDirection: "all",
   ctaBoard: "all",
+  ctaRecovery: "all",
   activeCtaSymbol: null,
   focusTechnicalSymbol: null,
   bmWindow: "5",
@@ -45,6 +46,13 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>'"]/g, (char) => 
 const numeric = (value) => Number(value || 0);
 const signClass = (value) => numeric(value) > 0 ? "bull-text" : numeric(value) < 0 ? "bear-text" : "neutral-text";
 /* 方向标签着色（CTA 拆解列）。未覆盖/中性一律用中性色，避免把缺失读成方向。 */
+/* 趋势恢复状态的配色：恢复触发是唯一需要当天细看的，用强调色 */
+function recoveryClass(state) {
+  if (state === "恢复触发") return "recovery-hit";
+  if (state === "回调中") return "neutral-text";
+  return "";
+}
+
 const dirTextClass = (label) => label === "偏多" ? "bull-text" : label === "偏空" ? "bear-text" : "neutral-text";
 const dirClass = (value) => numeric(value) >= 0 ? "bullish" : "bearish";
 const formatSigned = (value, digits = 0) => `${numeric(value) > 0 ? "+" : ""}${numeric(value).toLocaleString("zh-CN", {maximumFractionDigits: digits, minimumFractionDigits: digits})}`;
@@ -1674,6 +1682,7 @@ function renderCta() {
     if (state.ctaBoard === "composite" && row.board !== "composite") return false;
     if (state.ctaBoard === "single" && row.board !== "single") return false;
     if (state.ctaBoard === "conflict" && !row.directionConflict) return false;
+    if (state.ctaRecovery !== "all" && row.recovery !== state.ctaRecovery) return false;
     return true;
   });
   const bull = rows.filter((row) => row.score >= 15).length;
@@ -1684,7 +1693,7 @@ function renderCta() {
     summaryCard("中性", rows.length - bull - bear, "-15 至 +15"),
     summaryCard("偏空", bear, "分数不高于 -15", "bear-text"),
   ].join("");
-  $("#ctaRows").innerHTML = rows.map((row, index) => `<tr data-cta-symbol="${escapeHtml(row.symbol)}" class="${row.symbol === state.activeCtaSymbol ? "is-selected" : ""}"><td>${index + 1}</td><td><strong>${escapeHtml(row.variety)}</strong><small>${escapeHtml(row.symbol)}</small>${row.board === "single" ? `<small class="tag tag-ref row-flag">单因子</small>` : row.directionConflict ? `<small class="tag tag-warn row-flag">趋势背离</small>` : ""}</td><td>${escapeHtml(row.sector)}</td><td class="${dirTextClass(row.direction?.trend)}">${escapeHtml(row.direction?.trend || "—")}</td><td class="${dirTextClass(row.direction?.seat)}">${escapeHtml(row.direction?.seat || "—")}</td><td class="${row.direction?.consistency === "背离" ? "bear-text" : row.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(row.direction?.consistency || "—")}</td><td class="cta-score ${signClass(row.score)}">${formatSigned(row.score)}</td><td>${row.coverage}%</td><td class="${signClass(row.score)}">${escapeHtml(row.signal)}</td></tr>`).join("") || `<tr><td colspan="6">没有匹配品种。</td></tr>`;
+  $("#ctaRows").innerHTML = rows.map((row, index) => `<tr data-cta-symbol="${escapeHtml(row.symbol)}" class="${row.symbol === state.activeCtaSymbol ? "is-selected" : ""}"><td>${index + 1}</td><td><strong>${escapeHtml(row.variety)}</strong><small>${escapeHtml(row.symbol)}</small>${row.board === "single" ? `<small class="tag tag-ref row-flag">单因子</small>` : row.directionConflict ? `<small class="tag tag-warn row-flag">趋势背离</small>` : ""}</td><td>${escapeHtml(row.sector)}</td><td class="${dirTextClass(row.direction?.trend)}">${escapeHtml(row.direction?.trend || "—")}<small class="instrument-sub">${row.ret10 == null ? "—" : formatSigned(row.ret10, 1) + "%"} / ${row.return20d == null ? "—" : formatSigned(row.return20d, 1) + "%"}</small></td><td class="num ${row.volAdjusted == null ? "neutral-text" : signClass(row.volAdjusted)}">${row.volAdjusted == null ? "—" : row.volAdjusted.toFixed(2)}</td><td class="${recoveryClass(row.recovery)}">${escapeHtml(row.recovery || "—")}</td><td class="${dirTextClass(row.direction?.seat)}">${escapeHtml(row.direction?.seat || "—")}</td><td class="${row.direction?.consistency === "背离" ? "bear-text" : row.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(row.direction?.consistency || "—")}</td><td class="cta-score ${signClass(row.score)}">${formatSigned(row.score)}</td><td>${row.coverage}%</td><td class="${signClass(row.score)}">${escapeHtml(row.signal)}</td></tr>`).join("") || `<tr><td colspan="6">没有匹配品种。</td></tr>`;
   const btEl = $("#ctaBacktest");
   if (btEl) {
     if (!backtestData) {
@@ -1697,7 +1706,7 @@ function renderCta() {
   }
   const selected = rows.find((row) => row.symbol === state.activeCtaSymbol) || rows[0];
   state.activeCtaSymbol = selected?.symbol || null;
-  $("#ctaDetail").innerHTML = selected ? `<div class="detail-kicker">CTA FACTOR BREAKDOWN</div><h3>${escapeHtml(selected.variety)} <small>${escapeHtml(selected.symbol)}</small></h3><div class="cta-detail-score ${signClass(selected.score)}">${formatSigned(selected.score)} <small>${escapeHtml(selected.signal)}</small></div><p>${escapeHtml(selected.sector)} · 可用因子覆盖 ${selected.coverage}% · 年化波动 ${selected.volatility ?? "—"}%</p><div class="cta-direction-row"><span>趋势 <b class="${dirTextClass(selected.direction?.trend)}">${escapeHtml(selected.direction?.trend || "—")}</b></span><span>席位 <b class="${dirTextClass(selected.direction?.seat)}">${escapeHtml(selected.direction?.seat || "—")}</b></span><span>边际 <b class="${dirTextClass(selected.direction?.marginal)}">${escapeHtml(selected.direction?.marginal || "—")}</b></span><span>一致性 <b class="${selected.direction?.consistency === "背离" ? "bear-text" : selected.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(selected.direction?.consistency || "—")}</b></span></div>${selected.direction?.consistency === "背离" ? `<div class="detail-source-notice bear-text">趋势与席位方向相反：总分把它们平均后可能显示为「中性」，但这本身是分歧信号，不应按平静处理。</div>` : ""}<div class="cta-factor-list">${Object.entries(CTA_FACTOR_LABELS).map(([key, label]) => `<article><div><strong>${label}</strong><span class="${selected.factors[key] == null ? "neutral-text" : signClass(selected.factors[key])}">${selected.factors[key] == null ? "未覆盖" : formatSigned(selected.factors[key])}</span></div><p>${escapeHtml(selected.evidence[key])}</p></article>`).join("")}</div>${renderMetal4d(selected)}<div class="detail-source-notice">缺失因子不按中性计分，而是按可用权重重算。截图是二级证据；评分不是回测后的交易策略或买卖建议。</div>` : `<div class="detail-empty">该筛选条件没有 CTA 品种。</div>`;
+  $("#ctaDetail").innerHTML = selected ? `<div class="detail-kicker">CTA FACTOR BREAKDOWN</div><h3>${escapeHtml(selected.variety)} <small>${escapeHtml(selected.symbol)}</small></h3><div class="cta-detail-score ${signClass(selected.score)}">${formatSigned(selected.score)} <small>${escapeHtml(selected.signal)}</small></div><p>${escapeHtml(selected.sector)} · 可用因子覆盖 ${selected.coverage}% · 年化波动 ${selected.volatility ?? "—"}%</p><div class="cta-direction-row"><span>趋势 <b class="${dirTextClass(selected.direction?.trend)}">${escapeHtml(selected.direction?.trend || "—")}</b></span><span>席位 <b class="${dirTextClass(selected.direction?.seat)}">${escapeHtml(selected.direction?.seat || "—")}</b></span><span>边际 <b class="${dirTextClass(selected.direction?.marginal)}">${escapeHtml(selected.direction?.marginal || "—")}</b></span><span>一致性 <b class="${selected.direction?.consistency === "背离" ? "bear-text" : selected.direction?.consistency === "同向" ? "bull-text" : "neutral-text"}">${escapeHtml(selected.direction?.consistency || "—")}</b></span></div>${selected.direction?.consistency === "背离" ? `<div class="detail-source-notice bear-text">趋势与席位方向相反：总分把它们平均后可能显示为「中性」，但这本身是分歧信号，不应按平静处理。</div>` : ""}<div class="cta-factor-list">${Object.entries(CTA_FACTOR_LABELS).map(([key, label]) => `<article><div><strong>${label}</strong><span class="${selected.factors[key] == null ? "neutral-text" : signClass(selected.factors[key])}">${selected.factors[key] == null ? "未覆盖" : formatSigned(selected.factors[key])}</span></div><p>${escapeHtml(selected.evidence[key])}</p></article>`).join("")}</div>${selected && (selected.volAdjusted != null || selected.recovery) ? `<section class="cta-direction-extra"><div><small>波动调整动量</small><strong>${selected.volAdjusted == null ? "—" : selected.volAdjusted.toFixed(2)}</strong><em>20日对数收益 ÷（标准差×√20）</em></div><div><small>路径效率</small><strong>${selected.pathEfficiency == null ? "—" : selected.pathEfficiency.toFixed(2)}</strong><em>1=逐日顺畅，0=来回折返</em></div><div><small>趋势恢复状态</small><strong class="${recoveryClass(selected.recovery)}">${escapeHtml(selected.recovery || "—")}</strong><em>${selected.ret5 == null ? "5日短线 —" : `5日短线 ${formatSigned(selected.ret5, 1)}%`}</em></div></section>` : ""}${renderMetal4d(selected)}<div class="detail-source-notice">缺失因子不按中性计分，而是按可用权重重算。截图是二级证据；评分不是回测后的交易策略或买卖建议。</div>` : `<div class="detail-empty">该筛选条件没有 CTA 品种。</div>`;
   const focusSymbol = selected?.symbol;
   const focusPanel = $("#ctaFocusTechnical");
   if (focusPanel) focusPanel.innerHTML = window.FocusTechnical?.ALLOWED_SYMBOLS?.has(focusSymbol)
@@ -1942,6 +1951,7 @@ function bindEvents() {
   $("#decisionSearchInput").addEventListener("input", (event) => { state.decisionQuery = event.target.value; state.decisionPage = 1; renderDecisionView(); });
   $("#ctaSearchInput").addEventListener("input", (event) => { state.ctaQuery = event.target.value; renderCta(); });
   $("#ctaBoardFilter")?.addEventListener("change", (event) => { state.ctaBoard = event.target.value; state.activeCtaSymbol = null; renderCta(); });
+  $("#ctaRecoveryFilter")?.addEventListener("change", (event) => { state.ctaRecovery = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaSectorFilter").addEventListener("change", (event) => { state.ctaSector = event.target.value; state.activeCtaSymbol = null; renderCta(); });
   $("#ctaDirectionFilter").addEventListener("change", (event) => { state.ctaDirection = event.target.value; state.activeCtaSymbol = null; renderCta(); });
 }

@@ -1236,3 +1236,11 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .cta-backtest { margin: 8px 0 12px; padding: 10px 12px; font-size: 12px; line-height: 1.7; color: var(--muted); border-left: 2px solid var(--line-strong); background: var(--paper-soft); }
 .cta-backtest b { color: var(--ink); }
 .instrument-sub { display: block; margin-top: 2px; font-size: 10.5px; color: var(--muted); }
+
+/* 2026-11-23 审计：CTA 动量改口径后的新字段 */
+.recovery-hit { color: #fff; background: #A32D2D; padding: 0 4px; font-weight: 500; }
+.cta-direction-extra { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 10px 0; }
+.cta-direction-extra > div { padding: 8px 10px; background: var(--paper-soft); border-left: 2px solid var(--line-strong); }
+.cta-direction-extra small { display: block; font-size: 11px; color: var(--muted); }
+.cta-direction-extra strong { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.cta-direction-extra em { display: block; font-style: normal; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
