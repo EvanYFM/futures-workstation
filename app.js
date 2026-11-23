@@ -328,6 +328,10 @@ function renderCorePanorama() {
     const state = trendStateByReturn(r5);
     const ctaRow = ctaIndex[item.symbol];
     const ctaSignal = ctaRow?.signal || "";
+    /* 标签去噪（2026-11-23 用户要求）：共振标签里「机构与家人反向」占 30/58、
+       direction 为「中性」的也没有信息量，两者不再显示。保留三方/内外资共振与分歧。 */
+    const rawRef = String(item.resonance?.label || item.direction || "").trim();
+    const refLabel = !rawRef || rawRef === "中性" || rawRef.startsWith("机构与家人") ? "" : rawRef;
     const ctaClass = ctaSignal === "强多" ? "is-bull-strong" : ctaSignal === "偏多" ? "is-bull"
       : ctaSignal === "强空" ? "is-bear-strong" : ctaSignal === "偏空" ? "is-bear" : "is-flat";
     const rCell = (v) => v == null ? `<span class="num gray">—</span>` : `<span class="num ${v > 0 ? "bull-text" : v < 0 ? "bear-text" : "neutral-text"}">${formatSigned(v, 2)}%</span>`;
@@ -338,7 +342,7 @@ function renderCorePanorama() {
       <span>${rCell(r30)}</span>
       <span class="panorama-signal"><strong class="${signClass(item.amountSignal)}">${formatAmount(item.amountSignal)}</strong><small class="${signClass(item.handsSignal)}">${formatHands(item.handsSignal)} 手 · ${escapeHtml(item.marginalStructure || "边际待判")}</small></span>
       <span>${groupBars(item)}</span>
-      <span class="panorama-tags"><span class="tag tag-cta ${ctaClass}">${escapeHtml(ctaSignal || "无 CTA")}</span>${item.modelDivergence ? `<span class="tag tag-warn" title="机构单独看为${item.institutionHands > 0 ? "偏多" : "偏空"}，加入家人反向假设后翻转为${item.handsSignal > 0 ? "偏多" : "偏空"}">模型分歧</span>` : ""}<span class="tag tag-ref">${escapeHtml(item.resonance.label || item.direction)}</span><span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
+      <span class="panorama-tags">${ctaSignal && ctaSignal !== "中性" ? `<span class="tag tag-cta ${ctaClass}">${escapeHtml(ctaSignal)}</span>` : ""}${ctaRow?.volAdjusted != null ? `<span class="tag tag-vol">波动 ${formatSigned(ctaRow.volAdjusted, 2)}</span>` : ""}${ctaRow?.recovery === "恢复触发" ? `<span class="tag tag-hit" title="20 日方向不变，昨日仍在回调，今日转势并突破前 3 日极值">恢复触发</span>` : ""}${item.modelDivergence ? `<span class="tag tag-warn" title="机构单独看为${item.institutionHands > 0 ? "偏多" : "偏空"}，加入家人反向假设后翻转为${item.handsSignal > 0 ? "偏多" : "偏空"}">模型分歧</span>` : ""}${refLabel ? `<span class="tag tag-ref">${escapeHtml(refLabel)}</span>` : ""}<span class="trend-state trend-state-${state.cls}">${escapeHtml(state.label)}</span></span>
     </button>`;
   }).join("")}</div></section>`).join("")}`;
 }
