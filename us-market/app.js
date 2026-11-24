@@ -424,20 +424,20 @@ function renderChecklist(C) {
   if (!el) return;
   if (!C || !C.risk || !C.repair) { el.innerHTML = ''; return; }
   const col = (title, g, hl) => `
-    <div style="flex:1;min-width:300px">
+    <div style="min-width:0">
       <div class="mini" style="margin-bottom:5px"><b>${title}</b>
         <span class="${g.hits >= 3 ? hl : ''}" style="margin-left:6px">${g.hits}/${g.total}</span></div>
-      <table class="matrix" style="margin:0">
-        <colgroup><col style="width:142px"><col style="width:104px"><col></colgroup>
+      <table class="matrix" style="margin:0;width:100%;table-layout:fixed;font-size:12px">
+        <colgroup><col style="width:34%"><col style="width:26%"><col style="width:40%"></colgroup>
         ${g.items.map(it => `<tr>
-          <td style="text-align:left"><span class="shk ${it.hit ? 'triggered' : 'ok'}">${it.hit ? '●' : '○'}</span> ${it.label}</td>
-          <td class="num">${it.value}</td>
-          <td style="color:var(--ink3);font-size:11px">${it.threshold}</td></tr>`).join('')}
+          <td style="text-align:left;white-space:normal;line-height:1.4;padding:5px 8px"><span class="shk ${it.hit ? 'triggered' : 'ok'}">${it.hit ? '●' : '○'}</span> ${it.label}</td>
+          <td class="num" style="padding:5px 8px;white-space:nowrap">${it.value}</td>
+          <td style="color:var(--ink3);font-size:11.5px;white-space:normal;line-height:1.4;padding:5px 8px">${it.threshold}</td></tr>`).join('')}
       </table>
     </div>`;
   el.innerHTML = `
     <div class="shk-head"><span class="shk-verdict">双向确认：${C.state || '—'}</span></div>
-    <div style="display:flex;gap:22px;flex-wrap:wrap;margin-top:6px">
+    <div style="display:flex;flex-direction:column;gap:16px;margin-top:6px">
       ${col('风险升级（向全市场扩散）', C.risk, 'up')}
       ${col('修复确认（止跌与反向 Vanna）', C.repair, 'down')}
     </div>
