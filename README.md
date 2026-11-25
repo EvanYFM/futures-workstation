@@ -20,3 +20,7 @@
 - 源码与数据生产：EvanYFM/trading-system
 - 更新方式：构建产物 push 到本仓 main，GitHub Pages 约 1 分钟自动上线
 - 每日更新与发布检查：[`docs/daily-data-update-handoff.md`](docs/daily-data-update-handoff.md)
+
+## A 股盘后更新
+
+[执行任务书与换人交接清单](docs/ashare-daily-task.md)
