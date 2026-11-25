@@ -641,13 +641,13 @@ function renderBreadthValuation(DATA, t) {
     const typeName = { fomc: 'FOMC', macro: '数据', auction: '拍卖', earnings: '财报' };
     $('event-table').innerHTML =
       '<tr><th>日期</th><th>类型</th><th>事件</th><th>细节</th></tr>' +
-      E.items.map(x => `<tr>
+      E.items.map(x => `<tr${x.actual ? ' style="opacity:.7"' : ''}>
         <td>${x.date.slice(5)}</td>
         <td><span class="evt ${x.type}">${typeName[x.type] || x.type}</span></td>
         <td>${x.label}</td>
         <td style="text-align:left;color:var(--ink2)">${x.detail}${x.time ? ' · ' + x.time : ''}</td></tr>`).join('');
   } else {
-    $('event-table').innerHTML = '<tr><td style="color:var(--ink3)">未来两周无已公布日程</td></tr>';
+    $('event-table').innerHTML = '<tr><td style="color:var(--ink3)">近期无已公布日程</td></tr>';
   }
 }
 
@@ -1049,7 +1049,19 @@ function renderAll(DATA) {
   if (DATA.calls && DATA.calls.cards) {
     const au = DATA.calls.audit || {};
     const nMis = (au.number_mismatches || []).length;
-    $('calls-body').innerHTML =
+    const mf = DATA.calls.macro_frame;
+    const relCls = r => (r === '高' ? 'high' : (r === '低' || r === '无关') ? 'low' : 'mid');
+    const ref = mf && mf.snapshot_ref;
+    const mfHtml = mf ? `
+      <div class="macro-frame">
+        <div class="mf-row"><span class="mf-k">本周宏观判断</span><span class="mf-v">${mf.judgment || ''}</span></div>
+        <div class="mf-row"><span class="mf-k">今天新增的信息</span><span class="mf-v">${mf.new_info || ''}</span></div>
+        <div class="mf-row"><span class="mf-k">美股如何响应</span><span class="mf-v">${mf.market_response || ''}</span></div>
+        ${mf.relevance ? `<div class="mf-row"><span class="mf-k">今日相关性</span><span class="mf-v"><span class="mf-rel ${relCls(mf.relevance)}">${mf.relevance}</span></span></div>` : ''}
+        <div class="mf-row"><span class="mf-k">下个验证点</span><span class="mf-v">${mf.next_check || ''}</span></div>
+        ${ref ? `<div class="mf-src">宏观依据引用：${ref.site || '观澜'} ${ref.as_of ? String(ref.as_of).slice(0, 16).replace('T', ' ') : ''}${ref.confidence ? ` · 置信度 ${ref.confidence}` : ''}${ref.url ? ` · <a href="${ref.url}" target="_blank" rel="noopener">原页</a>` : ''}</div>` : ''}
+      </div>` : '';
+    $('calls-body').innerHTML = mfHtml +
       `${DATA.calls.generated_by === 'rules-v1' ? '<div class="mini" style="color:var(--ink3);margin:-6px 0 10px">本日研判为<b>规则模板</b>自动生成（未经模型判读）；数据与阈值可核对，观点性判断请以人工复盘为准。</div>' : ''}` +
       `${nMis ? `<div class="mini" style="color:var(--ink3);margin:-6px 0 10px">数字复核：正文有 ${nMis} 处与快照字段不一致（可能引用历史日期），明细见 calls.audit。</div>` : ''}` +
       `<div class="call-cards">${DATA.calls.cards.map(c => `
