@@ -233,7 +233,8 @@ function renderLiquidity(L, t, structure) {
     <div class="card"><div class="k"><span>高收益债利差 HY OAS</span></div>
       <div class="v num">${fmt(c.hy_oas)}%</div>
       <div class="s">${c.date || '—'} · 20日 ${bp(c.hy_oas_chg20)}（走阔=信用风险上升）</div>
-      ${cecLine ? `<div class="s" style="color:var(--ink3)">同窗口对照：${cecLine}</div>` : ''}</div>
+      ${cecLine ? `<div class="s" style="color:var(--ink3)">同窗口对照：${cecLine}</div>` : ''}
+      ${c.tiers ? `<div class="s" style="color:var(--ink3)">分层：BBB−AA <b class="${cls(c.tiers.bbb_aa_5d)}">${c.tiers.bbb_aa_bp}bp</b>（3年 ${c.tiers.bbb_aa_pctile} 分位）· CCC−BB <b class="${cls(c.tiers.ccc_bb_5d)}">${c.tiers.ccc_bb_bp}bp</b>（3年 ${c.tiers.ccc_bb_pctile} 分位）</div>` : ''}</div>
     <div class="card"><div class="k"><span>MOVE（债市隐含波动）</span></div>
       <div class="v num">${fmt(v.move, 1)}</div>
       <div class="s">${v.move != null && v.move > 120 ? '高波动区间' : '常态区间'} · 利率市场的"VIX"</div></div>
