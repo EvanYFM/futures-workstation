@@ -158,6 +158,39 @@ function renderLiquidity(L, t, structure) {
     }
   }
 
+  /* 信用分层时间线：CCC−BB 从哪个月起变成单边上行 */
+  const cch = makeChart('ch-cctier');
+  const ti = (L.credit || {}).tiers;   // 不用 c：同作用域内的 const c 在下方声明，先引用会 TDZ 报错
+  if (cch && ti && ti.hist?.length) {
+    const h = ti.hist;
+    const vals = h.map(p => p[1]);
+    const lo = Math.min(...vals), hi = Math.max(...vals);
+    const loIdx = vals.indexOf(lo), lastIdx = vals.length - 1;
+    cch.setOption({
+      tooltip: { ...TIP, trigger: 'axis', valueFormatter: v => Number(v).toFixed(0) + 'bp' },
+      grid: { left: 58, right: 24, top: 30, bottom: 24 },
+      xAxis: { type: 'category', data: h.map(p => p[0]), ...AX },
+      yAxis: { type: 'value', scale: true, ...AX },
+      series: [{ type: 'line', data: vals, showSymbol: false,
+        lineStyle: { color: t.up, width: 1.8 }, areaStyle: { color: t.up, opacity: 0.06 },
+        markPoint: { symbolSize: 40, label: { fontSize: 10, color: '#fff', formatter: p => p.value },
+          data: [
+            { name: '低点', coord: [h[loIdx][0], lo], value: lo, itemStyle: { color: t.down } },
+            { name: '当前', coord: [h[lastIdx][0], vals[lastIdx]], value: vals[lastIdx], itemStyle: { color: t.up } },
+          ] },
+        markLine: { silent: true, symbol: 'none', label: { show: false },
+          lineStyle: { color: t.split, type: 'dashed' }, data: [{ type: 'average' }] } }]
+    });
+    const cur = vals[lastIdx], rise = cur - lo;
+    if ($('cctier-note')) {
+      $('cctier-note').innerHTML =
+        `当前 <b>${cur}bp</b>（3年 ${ti.ccc_bb_pctile} 分位）· 5 日 ${ti.ccc_bb_5d > 0 ? '+' : ''}${ti.ccc_bb_5d}bp` +
+        ` · 区间 ${lo}–${hi}bp · 低点 ${lo}bp（${h[loIdx][0].slice(0, 7)}），自低点 <b>+${rise}bp</b>` +
+        ` · 数据 ${ti.date}，窗口 ${ti.window || ''}。走阔=低质量内部恶化，需与 HY 整体水平一起看：` +
+        `整体温和而分层走阔，说明压力集中在尾部。`;
+    }
+  }
+
   const ratios = L.ratios || [];
   $('risk-cards').innerHTML = ratios.map(r => `
     <div class="card">
