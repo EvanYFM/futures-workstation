@@ -35,6 +35,7 @@ const state = {
   activeCtaSymbol: null,
   focusTechnicalSymbol: null,
   bmWindow: "5",
+  tmWindow: "5",
   /* 策略规则卡 v2：A 区间回归 / B 突破（strategies.json 云端同步） */
   strategies: [],
   monthlyReviewMonth: "all",
@@ -229,6 +230,41 @@ function renderTide() {
     + `${detail ? `另有 ${detail}，不计入象限。` : ""}`
     + `方向计数 ${summary.bullishCount ?? "—"} 偏多 / ${summary.bearishCount ?? "—"} 偏空（按席位方向，含平盘），`
     + `合计 ${meta.total} 个品种。`;
+}
+
+/* 四之二 趋势资金：海通 / 东证 / 永安三家的共同加多与加空（2026-11-27 用户定）。
+   这三家资金切换灵活、偏趋势跟随，单独合成一个指标看"是否在同一品种上同向加仓"。
+   窗口只有 3/5/10 日——与上面的 5/10/20 分开，因为这里关心的是短期共振。 */
+function renderTrendMoney() {
+  const data = currentSnapshot().trendMoney || {};
+  const windows = data.windows || {};
+  const available = Object.keys(windows).sort((a, b) => Number(a) - Number(b));
+  if (!available.length) {
+    $("#trendMoneyGrid").innerHTML = "";
+    return;
+  }
+  const active = available.includes(state.tmWindow) ? state.tmWindow : available[0];
+  const group = windows[active] || { inflow: [], outflow: [] };
+  const brokers = data.brokers || [];
+  const list = (rows, cls, title) => `<div class="sector-side"><div class="side-title ${cls}">${title}（${active}日）</div>${rows.map((row) => `
+    <button class="sector-item" data-open-symbol="${escapeHtml(row.symbol)}" aria-label="查看${escapeHtml(row.variety)}详情">
+      <span class="sector-item-name">${escapeHtml(row.variety)} <small>${escapeHtml(row.symbol)}</small><em>${escapeHtml(row.sector || "")}</em></span>
+      <span class="${signClass(row.total)}"><small>三家合计</small><strong>${formatSigned(row.total, 0)} 手</strong></span>
+      <span class="tm-parts">${brokers.map((name) => `<small class="${signClass(row.brokers[name])}">${escapeHtml(name)} ${formatSigned(row.brokers[name], 0)}</small>`).join("")}</span>
+    </button>`).join("") || `<p class="empty-side">该窗口没有三家同向的品种</p>`}</div>`;
+
+  $("#trendMoneyGrid").innerHTML = `<article class="sector-block netflow-block bigmoney-block trendmoney-block">
+    <div class="sector-title">
+      <strong>趋势资金 · 三家共同方向</strong>
+      <div class="bm-tabs" role="tablist">${available.map((key) => `<button role="tab" data-tm-window="${key}" class="${key === active ? "is-active" : ""}" aria-selected="${key === active}">${key} 日</button>`).join("")}</div>
+      <span class="sector-count">${escapeHtml((data.brokers || []).join(" / "))} · 数据日 ${escapeHtml(data.asOf || "")} · 可用 ${data.coverage?.latestAllThree ?? "—"} 个品种</span>
+    </div>
+    <div class="sector-sides">
+      ${list(group.inflow || [], "bull-text", "共同加多")}
+      ${list(group.outflow || [], "bear-text", "共同加空")}
+    </div>
+    <p class="sector-note">${escapeHtml(data.note || "")}单位是手；金额未单列，避免与上方「内资+外资」的金额口径混读。</p>
+  </article>`;
 }
 
 /* 四 大资金趋势变化：内资+外资 5/10/20 日资金趋势 + 家人席位参考标注
@@ -1730,6 +1766,7 @@ function renderAll() {
   renderTide();
   renderCorePanorama();
   renderBigMoneyTrend();
+  renderTrendMoney();
   renderSeatFlow();
   renderBrokerHighlights();
   renderOverviewStatus();
@@ -1803,6 +1840,8 @@ function bindEvents() {
     if (dateButton) setDate(dateButton.dataset.date);
     const row = event.target.closest("[data-symbol]");
     if (row) { state.activeSymbol = row.dataset.symbol; renderInstrumentTable(); }
+    const tmTab = event.target.closest("[data-tm-window]");
+    if (tmTab) { state.tmWindow = tmTab.dataset.tmWindow; renderTrendMoney(); return; }
     const bmTab = event.target.closest("[data-bm-window]");
     if (bmTab) { state.bmWindow = bmTab.dataset.bmWindow; renderBigMoneyTrend(); return; }
     const ctaRow = event.target.closest("[data-cta-symbol]");
