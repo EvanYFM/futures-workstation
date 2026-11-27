@@ -1254,3 +1254,10 @@ button.decision-signal { width: 100%; text-align: left; font: inherit; color: in
 .trendmoney-block .sector-item { grid-template-columns: minmax(0, 1fr) 86px 116px; gap: 10px; }
 .trendmoney-block .tm-parts { display: flex; flex-direction: column; align-items: flex-end; gap: 0; white-space: nowrap; }
 .trendmoney-block .tm-parts small { font-size: 10px; line-height: 1.5; font-variant-numeric: tabular-nums; }
+
+/* 趋势资金：四个分项单独占一行（跨三列），避免挤进 86px 的窄列 */
+.trendmoney-block .tm-ratio {
+  grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px;
+  margin-top: 1px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.trendmoney-block .sector-item { row-gap: 1px; padding: 7px 0; }

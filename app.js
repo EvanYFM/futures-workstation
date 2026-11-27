@@ -249,8 +249,9 @@ function renderTrendMoney() {
   const list = (rows, cls, title) => `<div class="sector-side"><div class="side-title ${cls}">${title}（${active}日）</div>${rows.map((row) => `
     <button class="sector-item" data-open-symbol="${escapeHtml(row.symbol)}" aria-label="查看${escapeHtml(row.variety)}详情">
       <span class="sector-item-name">${escapeHtml(row.variety)} <small>${escapeHtml(row.symbol)}</small><em>${escapeHtml(row.sector || "")}</em></span>
-      <span class="${signClass(row.total)}"><small>三家合计</small><strong>${formatSigned(row.total, 0)} 手</strong></span>
+      <span class="${signClass(row.total)}"><small>三家净额 · ${escapeHtml(row.driver || "—")}</small><strong>${formatSigned(row.total, 0)} 手</strong></span>
       <span class="tm-parts">${brokers.map((name) => `<small class="${signClass(row.brokers[name])}">${escapeHtml(name)} ${formatSigned(row.brokers[name], 0)}</small>`).join("")}</span>
+      <span class="tm-ratio">${row.parts ? `加多 ${formatSigned(row.parts.addLong, 0)} · 减多 ${formatSigned(row.parts.reduceLong, 0)} · 加空 ${formatSigned(row.parts.addShort, 0)} · 减空 ${formatSigned(row.parts.reduceShort, 0)}` : ""}</span>
     </button>`).join("") || `<p class="empty-side">该窗口没有三家同向的品种</p>`}</div>`;
 
   $("#trendMoneyGrid").innerHTML = `<article class="sector-block netflow-block bigmoney-block trendmoney-block">
